@@ -67,6 +67,7 @@ struct AuthGateView: View {
                     .padding(.vertical, 16)
             }
         }
+        .madeByCredit()
         .sheet(isPresented: $showTerms) { TermsOfServiceView() }
         .sheet(isPresented: $showPrivacy) { PrivacyPolicyView() }
         .supportDialog(isPresented: $showSupport, viewModel: viewModel)

@@ -63,6 +63,7 @@ private struct WorkspaceChrome: ViewModifier {
 
     func body(content: Content) -> some View {
         content
+            .madeByCredit()
             .background(PantryBackground())
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(large ? .large : .inline)
@@ -114,6 +115,28 @@ extension View {
     func workspaceChrome(_ title: String, large: Bool = true, viewModel: PantryLinkViewModel) -> some View {
         modifier(WorkspaceChrome(title: title, large: large, viewModel: viewModel))
     }
+}
+
+// MARK: - "App made by Neil Mendpara" credit (pinned at the very bottom of every page)
+
+private struct CreditFooter: ViewModifier {
+    func body(content: Content) -> some View {
+        content.safeAreaInset(edge: .bottom, spacing: 0) {
+            Text("App made by Neil Mendpara")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(Color.pantryTextMuted)
+                .frame(maxWidth: .infinity)
+                .padding(.top, 6)
+                .padding(.bottom, 4)
+                .background(Color.pantryBackground.opacity(0.97))
+                .accessibilityLabel("App made by Neil Mendpara")
+        }
+    }
+}
+
+extension View {
+    /// Pins a readable "App made by Neil Mendpara" line at the bottom of the screen.
+    func madeByCredit() -> some View { modifier(CreditFooter()) }
 }
 
 // MARK: - Reduce-Transparency-aware glass surface (for floating panels / notifications)

@@ -53,6 +53,7 @@ struct TermsOfServiceView: View {
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
+            .madeByCredit()
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Close") { dismiss() }
@@ -105,6 +106,7 @@ struct PrivacyPolicyView: View {
             }
             .navigationTitle("Privacy Policy")
             .navigationBarTitleDisplayMode(.inline)
+            .madeByCredit()
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) { Button("Close") { dismiss() } }
             }
