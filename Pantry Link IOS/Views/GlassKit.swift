@@ -10,6 +10,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 // MARK: - Support contact
 
@@ -18,6 +19,33 @@ enum PantrySupport {
     static var mailtoURL: URL {
         URL(string: "mailto:\(email)?subject=PantryLink%20Georgia%20Support")
             ?? URL(string: "mailto:\(email)")!
+    }
+}
+
+/// Support dialog that works for EVERYONE — including users with no Mail app configured.
+/// Offers "Copy Email Address" (always works) alongside "Open in Mail".
+private struct SupportDialog: ViewModifier {
+    @Binding var isPresented: Bool
+    let viewModel: PantryLinkViewModel
+    @Environment(\.openURL) private var openURL
+
+    func body(content: Content) -> some View {
+        content.confirmationDialog("Contact Support", isPresented: $isPresented, titleVisibility: .visible) {
+            Button("Copy Email Address") {
+                UIPasteboard.general.string = PantrySupport.email
+                viewModel.showToast("Support email copied: \(PantrySupport.email)")
+            }
+            Button("Open in Mail") { openURL(PantrySupport.mailtoURL) }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Reach us at \(PantrySupport.email)")
+        }
+    }
+}
+
+extension View {
+    func supportDialog(isPresented: Binding<Bool>, viewModel: PantryLinkViewModel) -> some View {
+        modifier(SupportDialog(isPresented: isPresented, viewModel: viewModel))
     }
 }
 
@@ -31,7 +59,7 @@ private struct WorkspaceChrome: ViewModifier {
     @State private var showTerms = false
     @State private var showPrivacy = false
     @State private var showDeleteConfirm = false
-    @Environment(\.openURL) private var openURL
+    @State private var showSupport = false
 
     func body(content: Content) -> some View {
         content
@@ -41,7 +69,7 @@ private struct WorkspaceChrome: ViewModifier {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Menu {
-                        Button { openURL(PantrySupport.mailtoURL) } label: {
+                        Button { showSupport = true } label: {
                             Label("Contact Support", systemImage: "envelope")
                         }
                         Button { showPrivacy = true } label: { Label("Privacy Policy", systemImage: "hand.raised") }
@@ -76,6 +104,7 @@ private struct WorkspaceChrome: ViewModifier {
             } message: {
                 Text("This permanently removes your account, profile, and data. This cannot be undone. For help, contact \(PantrySupport.email).")
             }
+            .supportDialog(isPresented: $showSupport, viewModel: viewModel)
     }
 }
 

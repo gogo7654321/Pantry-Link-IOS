@@ -24,7 +24,7 @@ struct AuthGateView: View {
     @State private var errorMessage: String?
     @State private var showTerms = false
     @State private var showPrivacy = false
-    @Environment(\.openURL) private var openURL
+    @State private var showSupport = false
 
     // Shared credentials
     @State private var email = ""
@@ -69,6 +69,7 @@ struct AuthGateView: View {
         }
         .sheet(isPresented: $showTerms) { TermsOfServiceView() }
         .sheet(isPresented: $showPrivacy) { PrivacyPolicyView() }
+        .supportDialog(isPresented: $showSupport, viewModel: viewModel)
     }
 
     // MARK: - Card
@@ -125,13 +126,13 @@ struct AuthGateView: View {
     }
 
     private var logo: some View {
+        // Show the FULL logo (illustration + wordmark). No circular clip — that cropped the
+        // "PantryLink" wordmark. scaledToFit keeps the whole square artwork intact.
         Image("app_logo")
             .resizable()
             .scaledToFit()
-            .frame(width: 132, height: 132)
-            .clipShape(Circle())
-            .background(Circle().fill(.white).shadow(color: .black.opacity(0.10), radius: 10, y: 4))
-            .frame(maxWidth: .infinity)   // guarantees horizontal centering within the card
+            .frame(height: 150)
+            .frame(maxWidth: .infinity)   // horizontal centering within the card
             .padding(.top, 8)
     }
 
@@ -279,7 +280,7 @@ struct AuthGateView: View {
                 Text("·").foregroundStyle(Color.pantryTextMuted)
                 Button("Privacy") { showPrivacy = true }
                 Text("·").foregroundStyle(Color.pantryTextMuted)
-                Button("Contact Support") { openURL(PantrySupport.mailtoURL) }
+                Button("Contact Support") { showSupport = true }
             }
             .font(.system(size: 12, weight: .semibold))
             .tint(Color.pantryPrimary)
