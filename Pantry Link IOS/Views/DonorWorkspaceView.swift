@@ -91,8 +91,7 @@ struct DonorDashboardView: View {
                 .padding(20).frame(maxWidth: .infinity, alignment: .leading)
                 .background(Color.pantryPrimaryContainer.opacity(0.6), in: .rect(cornerRadius: 22, style: .continuous))
                 .overlay(alignment: .topTrailing) {
-                    Image("app_logo").resizable().scaledToFit()
-                        .frame(width: 52, height: 52).padding(14).opacity(0.9)
+                    PantryLogo(size: 50).padding(14)
                 }
 
                 // Stat tiles

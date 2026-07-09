@@ -55,6 +55,23 @@ extension View {
     }
 }
 
+/// The PantryLink logo as a clean, rounded, softly-shadowed badge — avoids the "clunky
+/// white square" look of the raw asset when placed on colored surfaces.
+struct PantryLogo: View {
+    var size: CGFloat = 56
+    var body: some View {
+        Image("app_logo")
+            .resizable()
+            .scaledToFit()
+            .padding(size * 0.05)
+            .frame(width: size, height: size)
+            .background(.white, in: RoundedRectangle(cornerRadius: size * 0.26, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: size * 0.26, style: .continuous)
+                .strokeBorder(Color.pantryBorder.opacity(0.5), lineWidth: 0.5))
+            .shadow(color: .black.opacity(0.08), radius: size * 0.09, y: 2)
+    }
+}
+
 /// The gradient background the auth gate and workspaces sit on
 /// (Kotlin: verticalGradient(background → primary @ 5%)).
 struct PantryBackground: View {

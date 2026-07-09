@@ -30,17 +30,29 @@ struct DonorMapView: View {
                 Text(viewModel.hasLocationPermission ? "Showing pantries near you" : "ZIP mode • \(viewModel.userZipCode)")
                     .font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.pantryTextDark)
                 Spacer()
-                Text("\(viewModel.foodBanks.count) pantries")
-                    .font(.system(size: 11, weight: .bold)).foregroundStyle(Color.pantrySecondary)
+                Label("Pantries", systemImage: "building.2.fill")
+                    .font(.system(size: 11, weight: .bold)).foregroundStyle(Color.pantryPrimary)
+                if !viewModel.savedLocations.isEmpty {
+                    Label("Saved", systemImage: "star.fill")
+                        .font(.system(size: 11, weight: .bold)).foregroundStyle(Color.pantryTertiary)
+                }
             }
             .padding(.horizontal, 16).padding(.vertical, 10)
 
             Map(position: $camera, selection: $selected) {
+                // Food banks — green building pins (selectable).
                 ForEach(viewModel.foodBanks) { fb in
                     Marker(fb.name, systemImage: "building.2.fill",
                            coordinate: CLLocationCoordinate2D(latitude: fb.latitude, longitude: fb.longitude))
                         .tint(Color.pantryPrimary)
                         .tag(fb)
+                }
+                // The donor's saved drop-off coordinates — distinct terracotta star pins.
+                ForEach(viewModel.savedLocations) { loc in
+                    let c = LocationHelper.coords(address: loc.address, zip: loc.zipCode)
+                    Marker(loc.name, systemImage: "star.fill",
+                           coordinate: CLLocationCoordinate2D(latitude: c.latitude, longitude: c.longitude))
+                        .tint(Color.pantryTertiary)
                 }
             }
             .mapStyle(.standard(elevation: .realistic))

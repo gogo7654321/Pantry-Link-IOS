@@ -90,7 +90,7 @@ struct DonorAccountView: View {
                     .background(badge.container, in: .capsule)
             }
             Spacer()
-            Image("app_logo").resizable().scaledToFit().frame(width: 44, height: 44).opacity(0.9)
+            PantryLogo(size: 46)
         }
         .padding(16)
         .background(Color.pantrySurface, in: .rect(cornerRadius: 20, style: .continuous))

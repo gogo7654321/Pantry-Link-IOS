@@ -127,12 +127,8 @@ struct AuthGateView: View {
     }
 
     private var logo: some View {
-        // Show the FULL logo (illustration + wordmark). No circular clip — that cropped the
-        // "PantryLink" wordmark. scaledToFit keeps the whole square artwork intact.
-        Image("app_logo")
-            .resizable()
-            .scaledToFit()
-            .frame(height: 150)
+        // Clean rounded logo badge (no hard white square, no circular crop of the wordmark).
+        PantryLogo(size: 132)
             .frame(maxWidth: .infinity)   // horizontal centering within the card
             .padding(.top, 8)
     }

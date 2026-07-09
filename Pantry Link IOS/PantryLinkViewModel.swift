@@ -61,7 +61,7 @@ final class PantryLinkViewModel {
 
     // MARK: - Notification & preference state
 
-    var emailNotificationsEnabled = true
+    var emailNotificationsEnabled = false   // Coming Soon → off by default
     var smsNotificationsEnabled = false
     var pushNotificationsEnabled = true
     var savedLocations: [SavedLocation] = []
