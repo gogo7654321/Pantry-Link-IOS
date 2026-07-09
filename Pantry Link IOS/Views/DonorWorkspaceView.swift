@@ -42,6 +42,12 @@ struct DonorWorkspaceView: View {
                         .workspaceChrome("My Claims", viewModel: viewModel)
                 }
             }
+            Tab("Account", systemImage: "person.crop.circle.fill") {
+                NavigationStack {
+                    DonorAccountView(viewModel: viewModel)
+                        .workspaceChrome("Account", viewModel: viewModel)
+                }
+            }
         }
         .tint(Color.pantryPrimary)
         .task { await viewModel.refreshAll() }
@@ -84,6 +90,10 @@ struct DonorDashboardView: View {
                 }
                 .padding(20).frame(maxWidth: .infinity, alignment: .leading)
                 .background(Color.pantryPrimaryContainer.opacity(0.6), in: .rect(cornerRadius: 22, style: .continuous))
+                .overlay(alignment: .topTrailing) {
+                    Image("app_logo").resizable().scaledToFit()
+                        .frame(width: 52, height: 52).padding(14).opacity(0.9)
+                }
 
                 // Stat tiles
                 HStack(spacing: 14) {

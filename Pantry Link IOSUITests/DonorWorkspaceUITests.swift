@@ -44,6 +44,17 @@ final class DonorWorkspaceUITests: XCTestCase {
         }
     }
 
+    func testDonorAccountTab() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-uitestDonor"]
+        app.launch()
+        let account = app.buttons["Account"].firstMatch
+        XCTAssertTrue(account.waitForExistence(timeout: 20), "Account tab not found")
+        account.tap()
+        _ = app.staticTexts["Edit Profile"].waitForExistence(timeout: 8)
+        attachScreenshot(app, "donor_account")
+    }
+
     func testFoodBankSignInShowsWorkspace() throws {
         let app = XCUIApplication()
         app.launch()
