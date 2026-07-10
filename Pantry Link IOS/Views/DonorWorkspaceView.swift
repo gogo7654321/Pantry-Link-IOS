@@ -70,9 +70,10 @@ struct DonorDashboardView: View {
     private var itemsDonated: Int {
         viewModel.claims.filter { $0.claimStatus == "Accepted" }.reduce(0) { $0 + $1.quantityClaimed }
     }
+    /// The user's FIRST name only (dashboard greeting), falling back to the email handle.
     private var userName: String {
-        let n = viewModel.currentUserProfile?.name ?? ""
-        if !n.isEmpty { return n }
+        let n = (viewModel.currentUserProfile?.name ?? "").trimmingCharacters(in: .whitespaces)
+        if !n.isEmpty { return n.split(separator: " ").first.map(String.init) ?? n }
         let email = viewModel.currentUserEmail
         return email.isEmpty ? "Neighbor" : String(email.prefix(while: { $0 != "@" }))
     }
@@ -82,7 +83,7 @@ struct DonorDashboardView: View {
             VStack(spacing: 20) {
                 // Welcome card (soft green)
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Welcome back,").font(.system(size: 15)).foregroundStyle(.secondary)
+                    Text("Welcome,").font(.system(size: 15)).foregroundStyle(.secondary)
                     Text(userName).font(.system(size: 26, weight: .bold)).foregroundStyle(Color.pantryTextDark)
                     Text("Your community needs you today. Check local requests to make an immediate impact.")
                         .font(.system(size: 15)).foregroundStyle(Color.pantryTextDark)
@@ -209,8 +210,7 @@ struct DonorClaimsView: View {
                             claim: claim,
                             foodBank: viewModel.foodBanks.first { $0.name == claim.foodBankName },
                             onCancel: { Task { await viewModel.cancelClaim(claimId: claim.id) } },
-                            onDropOff: { Task { await viewModel.dropOffClaim(claimId: claim.id) } },
-                            onExpire: { Task { await viewModel.triggerClaimExpiration(claimId: claim.id) } }
+                            onDropOff: { Task { await viewModel.dropOffClaim(claimId: claim.id) } }
                         )
                     }
                 }

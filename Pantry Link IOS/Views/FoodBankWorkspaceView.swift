@@ -90,7 +90,7 @@ struct FBActiveNeedsView: View {
             }
         }
         .padding(16).frame(maxWidth: .infinity, alignment: .leading)
-        .background(.white, in: .rect(cornerRadius: 14))
+        .background(Color.pantrySurface, in: .rect(cornerRadius: 14))
         .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Color.pantrySecondaryContainer, lineWidth: 1))
     }
 
@@ -134,7 +134,7 @@ struct FBPostRequestView: View {
                                     .padding(.horizontal, 12).padding(.vertical, 8)
                             }
                             .buttonStyle(.plain).foregroundStyle(sel ? .white : Color.pantrySecondary)
-                            .background(sel ? Color.pantryPrimary : .white, in: .rect(cornerRadius: 12))
+                            .background(sel ? Color.pantryPrimary : Color.pantrySurface, in: .rect(cornerRadius: 12))
                             .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(sel ? .clear : Color.pantrySecondaryContainer, lineWidth: 1))
                         }
                     }
@@ -182,7 +182,7 @@ struct FBPostRequestView: View {
     private func field(_ placeholder: String, text: Binding<String>) -> some View {
         TextField(placeholder, text: text)
             .font(.system(size: 14)).padding(12)
-            .background(.white, in: .rect(cornerRadius: 10))
+            .background(Color.pantrySurface, in: .rect(cornerRadius: 10))
             .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Color.pantrySecondaryContainer, lineWidth: 1))
     }
 }
@@ -267,7 +267,7 @@ struct FBVerifyDropsView: View {
             }
         }
         .padding(16).frame(maxWidth: .infinity, alignment: .leading)
-        .background(.white, in: .rect(cornerRadius: 14))
+        .background(Color.pantrySurface, in: .rect(cornerRadius: 14))
         .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Color.pantrySecondaryContainer, lineWidth: 1))
     }
 }
@@ -310,7 +310,7 @@ struct FBAuditView: View {
             }
         }
         .padding(12).frame(maxWidth: .infinity, alignment: .leading)
-        .background(.white, in: .rect(cornerRadius: 10))
+        .background(Color.pantrySurface, in: .rect(cornerRadius: 10))
         .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Color.pantrySecondaryContainer, lineWidth: 1))
     }
 }
@@ -358,13 +358,21 @@ struct FBProfileView: View {
                     Toggle("", isOn: $coldStorage).labelsHidden().tint(Color.pantryPrimary)
                 }
                 .padding(.horizontal, 14).padding(.vertical, 10)
-                .background(.white, in: .rect(cornerRadius: 12))
+                .background(Color.pantrySurface, in: .rect(cornerRadius: 12))
                 .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Color.pantrySecondaryContainer, lineWidth: 1))
 
                 Button { save() } label: {
                     Text("Save Profile").font(.system(size: 14, weight: .bold)).frame(maxWidth: .infinity).padding(.vertical, 6)
                 }
                 .buttonStyle(.glassProminent).tint(Color.pantryPrimary)
+
+                Button { viewModel.signOutUser() } label: {
+                    Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
+                        .font(.system(size: 14, weight: .bold)).frame(maxWidth: .infinity).padding(.vertical, 8)
+                }
+                .buttonStyle(.plain).foregroundStyle(Color.pantryPrimary)
+                .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Color.pantryPrimary.opacity(0.5), lineWidth: 1))
+                .accessibilityIdentifier("sign_out")
 
                 Button(role: .destructive) { showDeleteConfirm = true } label: {
                     Text("Delete Account").font(.system(size: 13, weight: .bold)).frame(maxWidth: .infinity).padding(.vertical, 8)
@@ -402,7 +410,7 @@ struct FBProfileView: View {
     private func field(_ placeholder: String, text: Binding<String>) -> some View {
         TextField(placeholder, text: text)
             .font(.system(size: 14)).padding(12)
-            .background(.white, in: .rect(cornerRadius: 10))
+            .background(Color.pantrySurface, in: .rect(cornerRadius: 10))
             .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Color.pantrySecondaryContainer, lineWidth: 1))
     }
 }

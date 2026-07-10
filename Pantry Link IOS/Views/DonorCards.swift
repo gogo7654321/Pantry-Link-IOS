@@ -92,7 +92,7 @@ struct RequestCard: View {
             }
         }
         .padding(18)
-        .background(.white, in: .rect(topLeadingRadius: 24, bottomLeadingRadius: 24, bottomTrailingRadius: 24, topTrailingRadius: 8))
+        .background(Color.pantrySurface, in: .rect(topLeadingRadius: 24, bottomLeadingRadius: 24, bottomTrailingRadius: 24, topTrailingRadius: 8))
         .overlay(UnevenRoundedRectangle(topLeadingRadius: 24, bottomLeadingRadius: 24, bottomTrailingRadius: 24, topTrailingRadius: 8)
             .strokeBorder(Color.pantrySecondaryContainer, lineWidth: 1.2))
     }
@@ -192,14 +192,13 @@ struct ClaimCard: View {
     let foodBank: FoodBankDTO?
     let onCancel: () -> Void
     let onDropOff: () -> Void
-    let onExpire: () -> Void
     @State private var showDirections = false
 
     private var statusColor: Color {
         switch claim.claimStatus {
         case "Claimed": return Color.pantryPrimary
         case "Ready for Drop-Off": return Color(hex: 0xF57C00)
-        case "Dropped Off": return Color(hex: 0x1976D2)
+        case "Dropped Off": return Color.pantryInfo
         case "Accepted": return Color(hex: 0x2E7D32)
         case "Rejected": return .red
         default: return Color.pantryTextMuted
@@ -280,16 +279,10 @@ struct ClaimCard: View {
                     .buttonStyle(.plain).foregroundStyle(.white)
                     .background(Color.pantryPrimary, in: .rect(cornerRadius: 10))
                 }
-                Button(action: onExpire) {
-                    Text("⏳ Simulate Expiration (Lock-up timer rule)")
-                        .font(.system(size: 11)).frame(maxWidth: .infinity).padding(.vertical, 8)
-                }
-                .buttonStyle(.plain).foregroundStyle(Color.pantrySecondary)
-                .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Color.pantryBorder, lineWidth: 1))
             }
         }
         .padding(18)
-        .background(.white, in: .rect(topLeadingRadius: 6, bottomLeadingRadius: 24, bottomTrailingRadius: 24, topTrailingRadius: 24))
+        .background(Color.pantrySurface, in: .rect(topLeadingRadius: 6, bottomLeadingRadius: 24, bottomTrailingRadius: 24, topTrailingRadius: 24))
         .overlay(UnevenRoundedRectangle(topLeadingRadius: 6, bottomLeadingRadius: 24, bottomTrailingRadius: 24, topTrailingRadius: 24)
             .strokeBorder(Color.pantrySecondaryContainer, lineWidth: 1.2))
     }

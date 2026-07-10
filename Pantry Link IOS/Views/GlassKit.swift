@@ -84,12 +84,6 @@ private struct WorkspaceChrome: ViewModifier {
                     }
                     .tint(Color.pantryPrimary)
                 }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Sign Out") { viewModel.signOutUser() }
-                        .font(.system(size: 15, weight: .semibold))
-                        .tint(Color.pantryPrimary)
-                        .accessibilityIdentifier("sign_out")
-                }
             }
             .sheet(isPresented: $showTerms) { TermsOfServiceView() }
             .sheet(isPresented: $showPrivacy) { PrivacyPolicyView() }
