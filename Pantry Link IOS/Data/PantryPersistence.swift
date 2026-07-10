@@ -46,6 +46,12 @@ enum PantryPersistence {
             do {
                 return try ModelContainer(for: schema, configurations: [config])
             } catch {
+                // Last resort: an in-memory store so the app launches instead of crashing.
+                print("[PantryLink] On-disk store failed (\(error)); falling back to in-memory.")
+                let memory = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+                if let container = try? ModelContainer(for: schema, configurations: [memory]) {
+                    return container
+                }
                 fatalError("Unable to build PantryLink ModelContainer: \(error)")
             }
         }

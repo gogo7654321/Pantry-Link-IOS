@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Disable Firebase's UIApplicationDelegate swizzling (GULAppDelegateSwizzler).
+	     Under the iOS 27 SwiftUI app lifecycle the swizzler misbehaves; we use only
+	     Email/Password Auth + Firestore (no Phone/SMS auth, no push), so we don't need it.
+	     Turning it off avoids the swizzler running at FirebaseApp.configure() time.
+	     Kept outside the file-system-synchronized source folder so Xcode uses it only as
+	     the Info.plist base and does not also copy it into Bundle Resources. -->
+	<key>FirebaseAppDelegateProxyEnabled</key>
+	<false/>
+	<!-- Home-screen / App Store display name (bundle id stays org.pantrylink.app). -->
+	<key>CFBundleDisplayName</key>
+	<string>PantryLink GA</string>
+</dict>
+</plist>

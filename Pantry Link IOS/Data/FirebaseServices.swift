@@ -182,10 +182,32 @@ struct FirebaseDiagnosticsProbe: DiagnosticsProbe {
 // MARK: - Factory (Firebase when configured, local otherwise)
 
 enum PantryServiceFactory {
+    /// Set to `true` ONLY to preview the UI on an iOS 27 *beta* device.
+    ///
+    /// Firebase's prebuilt Firestore/gRPC binary calls a private libdispatch selector
+    /// (`-[OS_dispatch_mach_msg _setContext:]`) that the iOS 27 beta removed, which crashes the
+    /// app at launch on iOS 27 betas only. iOS 26 (the shipping OS that App Review and real users
+    /// run) is unaffected. When this flag is `true`, Firebase is never configured, so the app runs
+    /// fully offline/local and that crash can't happen — handy for demoing the UI on a beta phone.
+    ///
+    /// MUST be `false` for TestFlight / App Store builds (otherwise auth + cloud sync are disabled).
+    static let offlinePreviewMode = false
+
     static func configureFirebase() {
-        if FirebaseApp.app() == nil {
-            FirebaseApp.configure()
+        if offlinePreviewMode {
+            print("[PantryLink] Offline preview mode — Firebase not configured (running local-only).")
+            return
         }
+
+        guard FirebaseApp.app() == nil else { return }
+        // `FirebaseApp.configure()` raises an (uncatchable) ObjC exception and crashes the app at
+        // launch if GoogleService-Info.plist isn't in the bundle. Guard on the plist so a missing
+        // config degrades to offline/local mode instead of a launch crash.
+        guard Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist") != nil else {
+            print("[PantryLink] GoogleService-Info.plist missing — running in offline mode.")
+            return
+        }
+        FirebaseApp.configure()
     }
 
     static var isFirebaseAvailable: Bool { FirebaseApp.app() != nil }
