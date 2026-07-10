@@ -79,6 +79,7 @@ final class PantryLinkRepository: Sendable {
             if let createdClaim = try await store.claim(id: claimId) {
                 await sync.pushClaim(createdClaim)
             }
+            await pushAuditLogs(since: timestamp)
         }
         return result
     }
@@ -87,13 +88,13 @@ final class PantryLinkRepository: Sendable {
         let success = try await store.cancelClaimTransaction(
             claimId: claimId, donorId: donorId, timestamp: timestamp
         )
-        if success { try await pushClaimAndRequest(claimId: claimId) }
+        if success { try await pushClaimAndRequest(claimId: claimId); await pushAuditLogs(since: timestamp) }
         return success
     }
 
     func markClaimAsDroppedOff(claimId: Int, timestamp: Int64) async throws -> Bool {
         let success = try await store.dropOffClaimTransaction(claimId: claimId, timestamp: timestamp)
-        if success { try await pushClaimAndRequest(claimId: claimId) }
+        if success { try await pushClaimAndRequest(claimId: claimId); await pushAuditLogs(since: timestamp) }
         return success
     }
 
@@ -106,7 +107,7 @@ final class PantryLinkRepository: Sendable {
         let success = try await store.reviewClaimTransaction(
             claimId: claimId, approved: approved, rejectionReason: rejectionReason, timestamp: timestamp
         )
-        if success { try await pushClaimAndRequest(claimId: claimId) }
+        if success { try await pushClaimAndRequest(claimId: claimId); await pushAuditLogs(since: timestamp) }
         return success
     }
 
@@ -115,12 +116,13 @@ final class PantryLinkRepository: Sendable {
         if success, let updated = try await store.request(id: requestId) {
             await sync.pushRequest(updated)
         }
+        if success { await pushAuditLogs(since: timestamp) }
         return success
     }
 
     func expireClaim(claimId: Int, timestamp: Int64) async throws -> Bool {
         let success = try await store.expireClaimTransaction(claimId: claimId, timestamp: timestamp)
-        if success { try await pushClaimAndRequest(claimId: claimId) }
+        if success { try await pushClaimAndRequest(claimId: claimId); await pushAuditLogs(since: timestamp) }
         return success
     }
 
@@ -147,6 +149,15 @@ final class PantryLinkRepository: Sendable {
         await sync.pushClaim(claim)
         if let request = try await store.request(id: claim.requestId) {
             await sync.pushRequest(request)
+        }
+    }
+
+    /// Push the audit-log entries created by a transaction (those stamped at/after its timestamp)
+    /// up to Firestore, so the audit trail is visible across devices and to the food bank.
+    private func pushAuditLogs(since timestamp: Int64) async {
+        let logs = (try? await store.allAuditLogs()) ?? []
+        for log in logs where log.timestamp >= timestamp {
+            await sync.pushAuditLog(log)
         }
     }
 }

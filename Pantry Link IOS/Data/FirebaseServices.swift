@@ -143,7 +143,8 @@ struct FirebaseProfileService: RemoteProfileService {
             "donorCanServeType": p.donorCanServeType, "donorCanServeQty": p.donorCanServeQty,
             "donorFrequency": p.donorFrequency,
             "fbAddress": p.fbAddress, "fbCity": p.fbCity, "fbZip": p.fbZip,
-            "fbSize": p.fbSize, "fbHours": p.fbHours, "fbColdStorage": p.fbColdStorage
+            "fbSize": p.fbSize, "fbHours": p.fbHours, "fbColdStorage": p.fbColdStorage,
+            "pushEnabled": p.pushEnabled, "emailEnabled": p.emailEnabled, "smsEnabled": p.smsEnabled
         ]
     }
 
@@ -166,6 +167,9 @@ struct FirebaseProfileService: RemoteProfileService {
         p.fbSize = d["fbSize"] as? String ?? ""
         p.fbHours = d["fbHours"] as? String ?? ""
         p.fbColdStorage = d["fbColdStorage"] as? Bool ?? false
+        p.pushEnabled = d["pushEnabled"] as? Bool ?? true
+        p.emailEnabled = d["emailEnabled"] as? Bool ?? false
+        p.smsEnabled = d["smsEnabled"] as? Bool ?? false
         return p
     }
 }

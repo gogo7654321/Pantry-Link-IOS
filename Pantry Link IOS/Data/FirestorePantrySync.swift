@@ -59,6 +59,15 @@ final class FirestorePantrySync: PantrySyncManager, @unchecked Sendable {
         ])
     }
 
+    func pushAuditLog(_ a: AuditLogDTO) async {
+        guard a.id > 0 else { return }
+        try? await db.collection("audit_logs").document(String(a.id)).setData([
+            "id": a.id, "donorId": a.donorId, "requestId": a.requestId, "claimId": a.claimId,
+            "actionType": a.actionType, "timestamp": a.timestamp,
+            "oldStatus": a.oldStatus, "newStatus": a.newStatus
+        ])
+    }
+
     func deleteRequestOnRemote(id: Int) async {
         guard id > 0 else { return }
         try? await db.collection("requests").document(String(id)).delete()
@@ -87,6 +96,12 @@ final class FirestorePantrySync: PantrySyncManager, @unchecked Sendable {
             guard let docs = snap?.documents, !docs.isEmpty else { return }
             let claims = docs.compactMap { Self.parseClaim($0) }
             Task { for c in claims { try? await store.upsertClaim(c) }; await MainActor.run(body: onChange) }
+        })
+
+        listeners.append(db.collection("audit_logs").addSnapshotListener { [store] snap, _ in
+            guard let docs = snap?.documents, !docs.isEmpty else { return }
+            let logs = docs.compactMap { Self.parseAuditLog($0) }
+            Task { for l in logs { try? await store.upsertAuditLog(l) }; await MainActor.run(body: onChange) }
         })
     }
 
@@ -159,6 +174,21 @@ final class FirestorePantrySync: PantrySyncManager, @unchecked Sendable {
             dropoffConfirmationTimestamp: dropoff,
             foodBankReviewResult: review,
             rejectionReason: rejection
+        )
+    }
+
+    private static func parseAuditLog(_ doc: QueryDocumentSnapshot) -> AuditLogDTO? {
+        guard let id = Int(doc.documentID) else { return nil }
+        let d = doc.data()
+        return AuditLogDTO(
+            id: id,
+            donorId: d["donorId"] as? String ?? "",
+            requestId: (d["requestId"] as? NSNumber)?.intValue ?? 0,
+            claimId: (d["claimId"] as? NSNumber)?.intValue ?? 0,
+            actionType: d["actionType"] as? String ?? "",
+            timestamp: (d["timestamp"] as? NSNumber)?.int64Value ?? 0,
+            oldStatus: d["oldStatus"] as? String ?? "",
+            newStatus: d["newStatus"] as? String ?? ""
         )
     }
 }

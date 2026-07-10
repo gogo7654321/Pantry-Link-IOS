@@ -124,15 +124,29 @@ final class PantryLinkViewModel {
 
     func toggleEmailNotifications() {
         emailNotificationsEnabled.toggle()
+        persistNotificationPrefs()
         showToast("Email alerts changed. SMS & Email notification features coming soon!")
     }
     func toggleSMSNotifications() {
         smsNotificationsEnabled.toggle()
+        persistNotificationPrefs()
         showToast("SMS alerts changed. SMS & Email notification features coming soon!")
     }
     func togglePushNotifications() {
         pushNotificationsEnabled.toggle()
+        persistNotificationPrefs()
         showToast("Push notifications updated: \(pushNotificationsEnabled)")
+    }
+
+    /// Persist the notification toggles onto the user's Firestore profile (skips demo/offline).
+    private func persistNotificationPrefs() {
+        guard let session = userSession, !session.isDemo, var profile = currentUserProfile else { return }
+        profile.pushEnabled = pushNotificationsEnabled
+        profile.emailEnabled = emailNotificationsEnabled
+        profile.smsEnabled = smsNotificationsEnabled
+        currentUserProfile = profile
+        let uid = session.uid
+        Task { await remoteProfile.saveUserProfile(uid: uid, profile: profile) }
     }
 
     // MARK: - Saved locations
@@ -432,6 +446,10 @@ final class PantryLinkViewModel {
 
         selectedRole = profile.role
         currentUserProfile = profile
+        // Restore notification preferences from the profile.
+        pushNotificationsEnabled = profile.pushEnabled
+        emailNotificationsEnabled = profile.emailEnabled
+        smsNotificationsEnabled = profile.smsEnabled
         let primaryZip = profile.role == PantryRole.donor.rawValue ? profile.donorZip : profile.fbZip
         if !primaryZip.isEmpty { setZipCode(primaryZip) }
         sessionStore.save(session: session, role: profile.role, profile: profile)

@@ -42,6 +42,11 @@ struct UserProfile: Codable, Sendable, Equatable {
     var fbSize: String = ""
     var fbHours: String = ""
     var fbColdStorage: Bool = false
+
+    // Notification preferences (persisted to Firestore so they follow the user across devices)
+    var pushEnabled: Bool = true
+    var emailEnabled: Bool = false
+    var smsEnabled: Bool = false
 }
 
 // MARK: - Diagnostics (Kotlin: data class DiagnosticItem)

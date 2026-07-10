@@ -16,6 +16,7 @@ protocol PantrySyncManager: Sendable {
     func pushRequest(_ request: RequestDTO) async
     func pushClaim(_ claim: ClaimDTO) async
     func pushFoodBank(_ foodBank: FoodBankDTO) async
+    func pushAuditLog(_ log: AuditLogDTO) async
     func deleteRequestOnRemote(id: Int) async
 }
 
@@ -28,5 +29,6 @@ struct NoOpSyncManager: PantrySyncManager {
     func pushRequest(_ request: RequestDTO) async {}
     func pushClaim(_ claim: ClaimDTO) async {}
     func pushFoodBank(_ foodBank: FoodBankDTO) async {}
+    func pushAuditLog(_ log: AuditLogDTO) async {}
     func deleteRequestOnRemote(id: Int) async {}
 }

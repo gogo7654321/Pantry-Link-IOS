@@ -265,6 +265,37 @@ actor PantryLinkStore {
         return try modelContext.fetch(d).map(\.dto)
     }
 
+    /// Insert-or-update an audit log by id (used by the Firestore listener so the trail syncs
+    /// across devices/users, not just the device that created it).
+    @discardableResult
+    func upsertAuditLog(_ input: AuditLogDTO) throws -> Int {
+        let target = input.id
+        if target != 0 {
+            var d = FetchDescriptor<AuditLog>(predicate: #Predicate { $0.entityID == target })
+            d.fetchLimit = 1
+            if let existing = try modelContext.fetch(d).first {
+                existing.donorId = input.donorId
+                existing.requestId = input.requestId
+                existing.claimId = input.claimId
+                existing.actionType = input.actionType
+                existing.timestamp = input.timestamp
+                existing.oldStatus = input.oldStatus
+                existing.newStatus = input.newStatus
+                try save()
+                return existing.entityID
+            }
+        }
+        let newId = target != 0 ? target : try nextId(AuditLog.self)
+        let model = AuditLog(
+            entityID: newId, donorId: input.donorId, requestId: input.requestId,
+            claimId: input.claimId, actionType: input.actionType, timestamp: input.timestamp,
+            oldStatus: input.oldStatus, newStatus: input.newStatus
+        )
+        modelContext.insert(model)
+        try save()
+        return newId
+    }
+
     /// Internal: append an audit log (Kotlin: insertAuditLog). Runs inside a transaction.
     @discardableResult
     private func appendAuditLog(
