@@ -101,11 +101,13 @@ struct AuthGateView: View {
 
             if isSignUp { signUpFields }
 
-            PantryField(title: "Email Address", systemImage: "envelope", text: $email, contentType: .emailAddress)
+            PantryField(title: "Email Address", systemImage: "envelope", text: $email, contentType: .username)
                 .textInputAutocapitalization(.never)
                 .keyboardType(.emailAddress)
-            // `.password` (not `.newPassword`) avoids the strong-password overlay intercepting input.
-            PantryField(title: "Password", systemImage: "lock", text: $password, secure: true, contentType: .password)
+            // Sign-up: `.newPassword` so iOS offers a generated strong password + prompts to save it to
+            // iCloud Keychain. Sign-in: `.password` so iOS AutoFills an existing saved credential.
+            PantryField(title: "Password", systemImage: "lock", text: $password, secure: true,
+                        contentType: isSignUp ? .newPassword : .password)
 
             if isSignUp { termsRow }
 
@@ -161,11 +163,12 @@ struct AuthGateView: View {
 
     @ViewBuilder private var donorProfileFields: some View {
         sectionLabel("Donor Profile & Logistics", color: .pantryPrimary, heavy: true)
-        HStack(spacing: 10) {
-            PantryField(title: "Base City (GA)", systemImage: nil, text: $donorCity)
-            PantryField(title: "ZIP Code", systemImage: "location", text: $donorZip)
-                .keyboardType(.numberPad)
+        AddressAutocompleteField(title: "Base City or Address (GA)", systemImage: "location", text: $donorCity) { r in
+            if !r.city.isEmpty { donorCity = r.city }
+            if !r.zip.isEmpty { donorZip = r.zip }
         }
+        PantryField(title: "ZIP Code", systemImage: "location", text: $donorZip)
+            .keyboardType(.numberPad)
         sectionLabel("What category of food can you serve / donate?", color: .pantryPrimary)
         Text("Select all food types you are equipped to handle. Choose 'All Categories' to reset.")
             .font(.system(size: 10)).foregroundStyle(Color.pantryTextMuted)
@@ -186,7 +189,10 @@ struct AuthGateView: View {
 
     @ViewBuilder private var foodBankProfileFields: some View {
         sectionLabel("Food Bank Location & Operations", color: .pantryPrimary, heavy: true)
-        PantryField(title: "Street Address", systemImage: "mappin.and.ellipse", text: $fbAddress)
+        AddressAutocompleteField(title: "Street Address", text: $fbAddress) { r in
+            if !r.city.isEmpty { fbCity = r.city }
+            if !r.zip.isEmpty { fbZip = r.zip }
+        }
         HStack(spacing: 10) {
             PantryField(title: "City (GA)", systemImage: nil, text: $fbCity)
             PantryField(title: "ZIP Code", systemImage: "location", text: $fbZip)
