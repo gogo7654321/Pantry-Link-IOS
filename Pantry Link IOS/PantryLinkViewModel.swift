@@ -137,14 +137,26 @@ final class PantryLinkViewModel {
 
     // MARK: - Saved locations
 
-    func addSavedLocation(name: String, address: String, zipCode: String) {
-        if name.isBlank || address.isBlank || zipCode.isBlank {
-            showToast("Failed: Fields cannot be empty.")
+    func addSavedLocation(name: String, address: String, zipCode: String,
+                          notes: String = "", latitude: Double? = nil, longitude: Double? = nil) {
+        if name.isBlank || address.isBlank {
+            showToast("Failed: a label and address are required.")
             return
         }
         let newId = (savedLocations.map(\.id).max() ?? 0) + 1
-        savedLocations.append(SavedLocation(id: newId, name: name, address: address, zipCode: zipCode))
-        showToast("Local saved location '\(name)' added successfully!")
+        savedLocations.append(SavedLocation(
+            id: newId, name: name, address: address, zipCode: zipCode,
+            notes: notes.trimmingCharacters(in: .whitespacesAndNewlines),
+            latitude: latitude, longitude: longitude))
+        showToast("Saved location '\(name)' added successfully!")
+    }
+
+    /// Update the free-text notes on an existing saved location.
+    func updateSavedLocationNotes(id: Int, notes: String) {
+        guard let idx = savedLocations.firstIndex(where: { $0.id == id }) else { return }
+        var loc = savedLocations[idx]
+        loc.notes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
+        savedLocations[idx] = loc
     }
 
     func removeSavedLocation(id: Int) {

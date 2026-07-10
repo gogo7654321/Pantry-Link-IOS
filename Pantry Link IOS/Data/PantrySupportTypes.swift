@@ -66,6 +66,17 @@ struct SavedLocation: Identifiable, Sendable, Equatable {
     let name: String
     let address: String
     let zipCode: String
+    var notes: String = ""
+    // Exact coordinates captured from address autocomplete (MKLocalSearch). When present these are
+    // used verbatim; otherwise we fall back to the LocationHelper ZIP approximation.
+    var latitude: Double? = nil
+    var longitude: Double? = nil
+
+    /// The coordinate to pin on the map: precise geocoded value when available, else the approximation.
+    var coordinate: GeoCoord {
+        if let latitude, let longitude { return GeoCoord(latitude: latitude, longitude: longitude) }
+        return LocationHelper.coords(address: address, zip: zipCode)
+    }
 }
 
 // MARK: - Roles

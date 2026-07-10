@@ -8,6 +8,7 @@
 //
 
 import SwiftUI
+import MapKit
 
 struct DonorAccountView: View {
     @Bindable var viewModel: PantryLinkViewModel
@@ -28,6 +29,10 @@ struct DonorAccountView: View {
     @State private var locName = ""
     @State private var locAddr = ""
     @State private var locZip = ""
+    @State private var locNotes = ""
+    @State private var locLat: Double? = nil
+    @State private var locLng: Double? = nil
+    @State private var addr = AddressSearchModel()
 
     @State private var showDeleteConfirm = false
 
@@ -143,42 +148,116 @@ struct DonorAccountView: View {
 
     private var savedLocationsCard: some View {
         card(title: "Saved Drop-off Coordinates", icon: "mappin.and.ellipse", trailing: {
-            Button(isAdding ? "Cancel" : "+ Add") { withAnimation { isAdding.toggle() } }
-                .font(.system(size: 13, weight: .bold)).tint(Color.pantryPrimary)
+            Button(isAdding ? "Cancel" : "+ Add") {
+                withAnimation { isAdding.toggle() }
+                if !isAdding { resetAddForm() }
+            }
+            .font(.system(size: 13, weight: .bold)).tint(Color.pantryPrimary)
         }) {
             if viewModel.savedLocations.isEmpty && !isAdding {
                 Text("No saved locations yet.").font(.system(size: 12)).foregroundStyle(.secondary)
             }
             ForEach(viewModel.savedLocations) { loc in
-                HStack(spacing: 10) {
-                    Image(systemName: "mappin.circle.fill").foregroundStyle(Color.pantrySecondary)
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(loc.name).font(.system(size: 13, weight: .bold)).foregroundStyle(Color.pantryTextDark)
-                        Text("\(loc.address) (\(loc.zipCode))").font(.system(size: 11)).foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 10) {
+                        Image(systemName: "star.circle.fill").foregroundStyle(Color.pantryTertiary)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(loc.name).font(.system(size: 13, weight: .bold)).foregroundStyle(Color.pantryTextDark)
+                            Text(loc.zipCode.isEmpty ? loc.address : "\(loc.address) (\(loc.zipCode))")
+                                .font(.system(size: 11)).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Button { viewModel.removeSavedLocation(id: loc.id) } label: {
+                            Image(systemName: "trash").font(.system(size: 14)).foregroundStyle(.red)
+                        }
                     }
-                    Spacer()
-                    Button { viewModel.removeSavedLocation(id: loc.id) } label: {
-                        Image(systemName: "trash").font(.system(size: 14)).foregroundStyle(.red)
+                    // Editable notes for this saved location (gate code, hours, contact…).
+                    HStack(alignment: .top, spacing: 6) {
+                        Image(systemName: "note.text").font(.system(size: 11)).foregroundStyle(Color.pantryTextMuted).padding(.top, 2)
+                        TextField("Add a note (gate code, hours, contact…)",
+                                  text: Binding(get: { loc.notes },
+                                                set: { viewModel.updateSavedLocationNotes(id: loc.id, notes: $0) }),
+                                  axis: .vertical)
+                            .font(.system(size: 11.5)).foregroundStyle(Color.pantryTextDark)
                     }
+                    .padding(8).background(Color.pantryFieldFill, in: .rect(cornerRadius: 8))
                 }
                 .padding(.vertical, 4)
             }
-            if isAdding {
-                VStack(spacing: 8) {
-                    field("Label (e.g., Home, Office)", text: $locName)
-                    field("Street Address", text: $locAddr)
-                    field("ZIP Code", text: $locZip).keyboardType(.numberPad)
-                    Button {
-                        viewModel.addSavedLocation(name: locName, address: locAddr, zipCode: locZip)
-                        locName = ""; locAddr = ""; locZip = ""; isAdding = false
-                    } label: {
-                        Text("Save Location").font(.system(size: 13, weight: .bold)).frame(maxWidth: .infinity).padding(.vertical, 4)
-                    }
-                    .buttonStyle(.glassProminent).tint(Color.pantryPrimary)
-                }
-                .padding(12).background(Color.pantryFieldFill, in: .rect(cornerRadius: 12))
-            }
+            if isAdding { addForm }
         }
+    }
+
+    /// Add form with native MapKit address autocomplete (exact coordinates, no formatting slip-ups).
+    private var addForm: some View {
+        VStack(spacing: 8) {
+            field("Label (e.g., Home, Office)", text: $locName)
+
+            field("Search address…", text: Binding(get: { addr.query }, set: { addr.query = $0 }))
+                .autocorrectionDisabled()
+
+            if !addr.suggestions.isEmpty {
+                VStack(spacing: 0) {
+                    ForEach(Array(addr.suggestions.prefix(5).enumerated()), id: \.offset) { _, s in
+                        Button { Task { await choose(s) } } label: {
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(s.title).font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.pantryTextDark)
+                                if !s.subtitle.isEmpty {
+                                    Text(s.subtitle).font(.system(size: 11)).foregroundStyle(.secondary)
+                                }
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 7).padding(.horizontal, 8)
+                        }
+                        .buttonStyle(.plain)
+                        Divider()
+                    }
+                }
+                .background(Color.pantrySurface, in: .rect(cornerRadius: 10))
+                .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Color.pantryBorder, lineWidth: 1))
+            }
+
+            if !locAddr.isEmpty {
+                HStack(spacing: 6) {
+                    Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.pantryPrimary).font(.system(size: 12))
+                    Text(locZip.isEmpty ? locAddr : "\(locAddr) (\(locZip))")
+                        .font(.system(size: 11)).foregroundStyle(Color.pantryTextDark)
+                    Spacer()
+                }
+            }
+
+            field("Notes (optional)", text: $locNotes)
+
+            Button {
+                viewModel.addSavedLocation(name: locName, address: locAddr, zipCode: locZip,
+                                           notes: locNotes, latitude: locLat, longitude: locLng)
+                resetAddForm(); withAnimation { isAdding = false }
+            } label: {
+                Text("Save Location").font(.system(size: 13, weight: .bold)).frame(maxWidth: .infinity).padding(.vertical, 4)
+            }
+            .buttonStyle(.glassProminent).tint(Color.pantryPrimary)
+            .disabled(locName.isBlank || locAddr.isBlank)
+        }
+        .padding(12).background(Color.pantryFieldFill, in: .rect(cornerRadius: 12))
+    }
+
+    /// Resolve a chosen autocomplete suggestion to exact coordinates + clean address parts.
+    private func choose(_ s: MKLocalSearchCompletion) async {
+        guard let r = await addr.resolve(s) else {
+            viewModel.showToast("Couldn't resolve that address — try another.")
+            return
+        }
+        locAddr = r.street
+        locZip = r.zip
+        locLat = r.latitude
+        locLng = r.longitude
+        if locName.isBlank { locName = s.title }   // sensible default label
+        addr.clear()                               // hide the suggestion list
+    }
+
+    private func resetAddForm() {
+        locName = ""; locAddr = ""; locZip = ""; locNotes = ""
+        locLat = nil; locLng = nil
+        addr.clear()
     }
 
     // MARK: Account actions
@@ -191,6 +270,7 @@ struct DonorAccountView: View {
             }
             .buttonStyle(.plain).foregroundStyle(Color.pantryPrimary)
             .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Color.pantryPrimary.opacity(0.5), lineWidth: 1))
+            .accessibilityIdentifier("sign_out")
 
             Button(role: .destructive) { showDeleteConfirm = true } label: {
                 Label("Delete Account", systemImage: "trash")
@@ -280,4 +360,9 @@ struct DonorAccountView: View {
         }
         .padding(.vertical, 4)
     }
+}
+
+// String.isBlank is fileprivate in other files; add a local copy for this view.
+private extension String {
+    var isBlank: Bool { trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 }
