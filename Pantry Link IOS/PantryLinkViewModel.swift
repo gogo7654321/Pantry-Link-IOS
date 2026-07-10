@@ -148,6 +148,7 @@ final class PantryLinkViewModel {
             id: newId, name: name, address: address, zipCode: zipCode,
             notes: notes.trimmingCharacters(in: .whitespacesAndNewlines),
             latitude: latitude, longitude: longitude))
+        persistSavedLocations()
         showToast("Saved location '\(name)' added successfully!")
     }
 
@@ -157,12 +158,23 @@ final class PantryLinkViewModel {
         var loc = savedLocations[idx]
         loc.notes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
         savedLocations[idx] = loc
+        persistSavedLocations()
     }
 
     func removeSavedLocation(id: Int) {
         guard let location = savedLocations.first(where: { $0.id == id }) else { return }
         savedLocations.removeAll { $0.id == id }
+        persistSavedLocations()
         showToast("Removed location '\(location.name)'")
+    }
+
+    /// Persist the current saved-location list to Firestore under the signed-in user (skips
+    /// demo/offline sessions, which keep them in-memory only).
+    private func persistSavedLocations() {
+        guard let session = userSession, !session.isDemo else { return }
+        let uid = session.uid
+        let locs = savedLocations
+        Task { await remoteProfile.saveSavedLocations(uid: uid, locs) }
     }
 
     func dismissWelcomeRewardsDialog() { showWelcomeRewardsDialog = false }
@@ -423,6 +435,11 @@ final class PantryLinkViewModel {
         let primaryZip = profile.role == PantryRole.donor.rawValue ? profile.donorZip : profile.fbZip
         if !primaryZip.isEmpty { setZipCode(primaryZip) }
         sessionStore.save(session: session, role: profile.role, profile: profile)
+
+        // Load this user's saved drop-off locations from Firestore (skip demo/offline sessions).
+        if !session.isDemo {
+            savedLocations = await remoteProfile.fetchSavedLocations(uid: session.uid)
+        }
     }
 
     // MARK: - Food bank persistence (Kotlin: saveFoodBankLocally)

@@ -131,6 +131,10 @@ protocol RemoteProfileService: Sendable {
     func deleteUserProfile(uid: String) async
     func saveFoodBankDocument(_ foodBank: FoodBankDTO) async
     func deleteFoodBankDocuments(email: String) async
+    // Saved drop-off locations, persisted per-user on the users/{uid} document so they survive
+    // restarts and sync across the user's devices (same schema on iOS + Android).
+    func saveSavedLocations(uid: String, _ locations: [SavedLocation]) async
+    func fetchSavedLocations(uid: String) async -> [SavedLocation]
 }
 
 /// Offline no-op: profiles live in local storage (PantrySessionStore) and the SwiftData store.
@@ -141,6 +145,8 @@ struct NoOpRemoteProfileService: RemoteProfileService {
     func deleteUserProfile(uid: String) async {}
     func saveFoodBankDocument(_ foodBank: FoodBankDTO) async {}
     func deleteFoodBankDocuments(email: String) async {}
+    func saveSavedLocations(uid: String, _ locations: [SavedLocation]) async {}
+    func fetchSavedLocations(uid: String) async -> [SavedLocation] { [] }
 }
 
 // MARK: - Diagnostics (Kotlin: runDiagnostics — Firebase/Firestore/Places/Gemini checks)

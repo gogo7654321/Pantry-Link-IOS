@@ -71,7 +71,8 @@ struct FirebaseProfileService: RemoteProfileService {
     private var db: Firestore { Firestore.firestore() }
 
     func saveUserProfile(uid: String, profile: UserProfile) async {
-        try? await db.collection("users").document(uid).setData(Self.dict(from: profile))
+        // merge:true so saving the profile never clobbers sibling fields like `savedLocations`.
+        try? await db.collection("users").document(uid).setData(Self.dict(from: profile), merge: true)
     }
 
     func fetchUserProfile(uid: String) async -> UserProfile? {
@@ -100,6 +101,36 @@ struct FirebaseProfileService: RemoteProfileService {
         guard let snapshot = try? await db.collection("food_banks")
             .whereField("email", isEqualTo: email).getDocuments() else { return }
         for doc in snapshot.documents { try? await doc.reference.delete() }
+    }
+
+    func saveSavedLocations(uid: String, _ locations: [SavedLocation]) async {
+        let arr: [[String: Any]] = locations.map { loc in
+            var m: [String: Any] = [
+                "id": loc.id, "name": loc.name, "address": loc.address,
+                "zipCode": loc.zipCode, "notes": loc.notes
+            ]
+            if let lat = loc.latitude { m["latitude"] = lat }
+            if let lng = loc.longitude { m["longitude"] = lng }
+            return m
+        }
+        // merge:true so we only touch the savedLocations field, never clobber the profile.
+        try? await db.collection("users").document(uid).setData(["savedLocations": arr], merge: true)
+    }
+
+    func fetchSavedLocations(uid: String) async -> [SavedLocation] {
+        guard let snapshot = try? await db.collection("users").document(uid).getDocument(),
+              let raw = snapshot.data()?["savedLocations"] as? [[String: Any]] else { return [] }
+        return raw.compactMap { m in
+            guard let id = (m["id"] as? NSNumber)?.intValue else { return nil }
+            return SavedLocation(
+                id: id,
+                name: m["name"] as? String ?? "",
+                address: m["address"] as? String ?? "",
+                zipCode: m["zipCode"] as? String ?? "",
+                notes: m["notes"] as? String ?? "",
+                latitude: (m["latitude"] as? NSNumber)?.doubleValue,
+                longitude: (m["longitude"] as? NSNumber)?.doubleValue)
+        }
     }
 
     // MARK: Mapping

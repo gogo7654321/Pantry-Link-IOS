@@ -40,6 +40,27 @@ struct DemoSeedTests {
             status: "Posted"))
     }
 
+    @Test("saved locations round-trip to Firestore")
+    func savedLocationsRoundTrip() async throws {
+        PantryServiceFactory.configureFirebase()
+        guard PantryServiceFactory.isFirebaseAvailable else { Issue.record("no firebase"); return }
+        let svc = FirebaseProfileService()
+        let uid = "roundtrip_test_uid"
+        let sample = [
+            SavedLocation(id: 1, name: "Home", address: "233 Peachtree St NE", zipCode: "30303",
+                          notes: "Ring the bell", latitude: 33.7592, longitude: -84.3874),
+            SavedLocation(id: 2, name: "Office", address: "1280 W Peachtree St NW", zipCode: "30309")
+        ]
+        await svc.saveSavedLocations(uid: uid, sample)
+        let fetched = await svc.fetchSavedLocations(uid: uid)
+        print("[roundtrip] saved \(sample.count), fetched \(fetched.count)")
+        #expect(fetched.count == 2)
+        #expect(fetched.first(where: { $0.id == 1 })?.notes == "Ring the bell")
+        #expect(fetched.first(where: { $0.id == 1 })?.latitude == 33.7592)
+        // cleanup
+        try? await Firestore.firestore().collection("users").document(uid).delete()
+    }
+
     @Test("AUDIT: list all requests from server")
     func auditRequests() async throws {
         PantryServiceFactory.configureFirebase()
