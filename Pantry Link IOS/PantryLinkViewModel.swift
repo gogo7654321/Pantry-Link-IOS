@@ -116,7 +116,9 @@ final class PantryLinkViewModel {
     func clearToast() { toastMessage = nil }
 
     func triggerSimulatedPushAlert(title: String, message: String) {
-        if pushNotificationsEnabled { activePushAlert = "\(title)\n\(message)" }
+        guard pushNotificationsEnabled else { return }
+        activePushAlert = "\(title)\n\(message)"        // in-app banner (foreground)
+        PantryNotifications.post(title: title, body: message)   // real system notification (background/lock screen)
     }
     func dismissPushAlert() { activePushAlert = nil }
 
@@ -134,6 +136,7 @@ final class PantryLinkViewModel {
     }
     func togglePushNotifications() {
         pushNotificationsEnabled.toggle()
+        if pushNotificationsEnabled { PantryNotifications.requestAuthorization() }
         persistNotificationPrefs()
         showToast("Push notifications updated: \(pushNotificationsEnabled)")
     }

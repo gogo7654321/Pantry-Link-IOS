@@ -76,6 +76,11 @@ struct RootView: View {
                 Task { @MainActor in await viewModel?.refreshAll() }
             }
         }
+        // Ask for notification permission once the scene is active (requesting from the view-model
+        // init is too early — iOS silently drops the prompt before there's an active scene).
+        .task {
+            if viewModel.pushNotificationsEnabled { PantryNotifications.requestAuthorization() }
+        }
         .animation(.easeInOut, value: viewModel.toastMessage)
         .animation(.easeInOut, value: viewModel.activePushAlert)
         .sheet(isPresented: Binding(
