@@ -40,6 +40,23 @@ struct DemoSeedTests {
             status: "Posted"))
     }
 
+    @Test("AUDIT: list all requests from server")
+    func auditRequests() async throws {
+        PantryServiceFactory.configureFirebase()
+        guard PantryServiceFactory.isFirebaseAvailable else { Issue.record("no firebase"); return }
+        let db = Firestore.firestore()
+        let snap = try await db.collection("requests").getDocuments(source: .server)
+        print("[audit] requests collection has \(snap.documents.count) docs (from SERVER):")
+        for d in snap.documents {
+            print("[audit]   id=\(d.documentID) title=\(d.data()["title"] ?? "?") status=\(d.data()["status"] ?? "?")")
+        }
+        let fb = try await db.collection("food_banks").getDocuments(source: .server)
+        print("[audit] food_banks collection has \(fb.documents.count) docs (from SERVER):")
+        for d in fb.documents {
+            print("[audit]   id=\(d.documentID) name=\(d.data()["name"] ?? "?")")
+        }
+    }
+
     @Test("delete demo request + food bank")
     func cleanup() async throws {
         guard PantryServiceFactory.isFirebaseAvailable else { return }

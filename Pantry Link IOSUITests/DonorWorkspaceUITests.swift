@@ -55,6 +55,41 @@ final class DonorWorkspaceUITests: XCTestCase {
         attachScreenshot(app, "donor_account")
     }
 
+    /// Exercises the saved-location address autocomplete end-to-end: opens the add form, types an
+    /// address, and confirms live MapKit suggestions appear (also proves AddressSearchModel doesn't
+    /// crash under the MainActor.assumeIsolated delegate path on iOS 27).
+    func testSavedLocationAutocomplete() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-uitestDonor"]
+        app.launch()
+        let account = app.buttons["Account"].firstMatch
+        XCTAssertTrue(account.waitForExistence(timeout: 20), "Account tab not found")
+        account.tap()
+
+        // Reveal + open the Saved Drop-off Coordinates add form.
+        let add = app.buttons["+ Add"].firstMatch
+        var swipes = 0
+        while !add.exists && swipes < 8 { app.swipeUp(); swipes += 1 }
+        XCTAssertTrue(add.waitForExistence(timeout: 8), "Add button not found")
+        add.tap()
+
+        let search = app.textFields["Search address…"]
+        var s2 = 0
+        while !search.exists && s2 < 6 { app.swipeUp(); s2 += 1 }
+        XCTAssertTrue(search.waitForExistence(timeout: 8), "Address search field not found")
+        search.tap()
+        search.typeText("233 Peachtree St NE Atlanta")
+
+        // Live MapKit suggestions should appear (needs sim network).
+        let suggestion = app.staticTexts.matching(
+            NSPredicate(format: "label CONTAINS[c] %@", "Peachtree")).firstMatch
+        let appeared = suggestion.waitForExistence(timeout: 20)
+        attachScreenshot(app, "saved_autocomplete")
+        XCTAssertTrue(appeared, "Autocomplete suggestions did not appear")
+        suggestion.tap()
+        attachScreenshot(app, "saved_autocomplete_picked")
+    }
+
     func testFoodBankSignInShowsWorkspace() throws {
         let app = XCUIApplication()
         app.launch()
