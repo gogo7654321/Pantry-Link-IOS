@@ -31,6 +31,13 @@ enum PantryPersistence {
     /// Builds the on-disk container. Falls back to a fresh store if the existing file
     /// can't be opened under the current schema (Room: fallbackToDestructiveMigration).
     static func makeContainer(inMemory: Bool = false) -> ModelContainer {
+        // On a fresh install the Application Support directory may not exist yet, and SwiftData's
+        // store creation there can fail ("Failed to create file / Sandbox access denied"). Create
+        // it up front so the on-disk store is built reliably instead of relying on recovery.
+        if !inMemory {
+            _ = try? FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask,
+                                             appropriateFor: nil, create: true)
+        }
         let config = ModelConfiguration(
             databaseName,
             schema: schema,
