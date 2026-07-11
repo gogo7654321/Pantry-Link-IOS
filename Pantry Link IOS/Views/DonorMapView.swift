@@ -30,6 +30,7 @@ struct DonorMapView: View {
 
     @State private var selection: MapPin?
     @State private var dirTarget: DirTarget?
+    @State private var claimTarget: RequestDTO?
     @State private var camera: MapCameraPosition = .region(
         MKCoordinateRegion(center: CLLocationCoordinate2D(latitude: 33.7490, longitude: -84.3880),
                            span: MKCoordinateSpan(latitudeDelta: 1.2, longitudeDelta: 1.2))
@@ -56,12 +57,28 @@ struct DonorMapView: View {
             .padding(.horizontal, 16).padding(.vertical, 10)
 
             Map(position: $camera, selection: $selection) {
-                // Food banks — green building pins (selectable).
+                // Food banks — green building pins with a badge showing their # of active needs.
                 ForEach(viewModel.foodBanks) { fb in
-                    Marker(fb.name, systemImage: "building.2.fill",
-                           coordinate: CLLocationCoordinate2D(latitude: fb.latitude, longitude: fb.longitude))
-                        .tint(Color.pantryPrimary)
-                        .tag(MapPin.foodBank(fb.id))
+                    let count = openRequests(for: fb).count
+                    Annotation(fb.name, coordinate: CLLocationCoordinate2D(latitude: fb.latitude, longitude: fb.longitude)) {
+                        ZStack(alignment: .topTrailing) {
+                            Image(systemName: "building.2.fill")
+                                .font(.system(size: 15, weight: .bold)).foregroundStyle(.white)
+                                .frame(width: 36, height: 36)
+                                .background(Color.pantryPrimary, in: Circle())
+                                .overlay(Circle().strokeBorder(.white, lineWidth: 2))
+                                .shadow(color: .black.opacity(0.2), radius: 2, y: 1)
+                            if count > 0 {
+                                Text("\(count)")
+                                    .font(.system(size: 11, weight: .heavy)).foregroundStyle(.white)
+                                    .padding(.horizontal, 5).frame(minWidth: 18, minHeight: 18)
+                                    .background(Color.pantryTertiary, in: Capsule())
+                                    .overlay(Capsule().strokeBorder(.white, lineWidth: 1.5))
+                                    .offset(x: 8, y: -8)
+                            }
+                        }
+                    }
+                    .tag(MapPin.foodBank(fb.id))
                 }
                 // The donor's saved drop-off coordinates — distinct terracotta star pins (selectable).
                 ForEach(viewModel.savedLocations) { loc in
@@ -86,6 +103,7 @@ struct DonorMapView: View {
             Button("Open in Google Maps") { MapsLauncher.openGoogleMaps(coordinate: t.coord, address: t.address) }
             Button("Cancel", role: .cancel) {}
         }
+        .sheet(item: $claimTarget) { req in ClaimSheet(viewModel: viewModel, request: req) }
     }
 
     @ViewBuilder
@@ -128,10 +146,14 @@ struct DonorMapView: View {
         }
     }
 
-    private func foodBankCallout(_ fb: FoodBankDTO) -> some View {
-        let openNeeds = viewModel.requests.filter {
+    private func openRequests(for fb: FoodBankDTO) -> [RequestDTO] {
+        viewModel.requests.filter {
             $0.foodBankId == fb.id && $0.status != "Closed" && $0.status != "Confirmed by Food Bank"
-        }.count
+        }
+    }
+
+    private func foodBankCallout(_ fb: FoodBankDTO) -> some View {
+        let needs = openRequests(for: fb)
         return VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text(fb.name).font(.system(size: 15, weight: .heavy)).foregroundStyle(Color.pantryPrimary)
@@ -143,7 +165,7 @@ struct DonorMapView: View {
             HStack(spacing: 14) {
                 Label(String(format: "%.1f mi", viewModel.getDistanceToFoodBank(fb)), systemImage: "car.fill")
                     .font(.system(size: 12, weight: .bold)).foregroundStyle(Color.pantryPrimary)
-                Label("\(openNeeds) active needs", systemImage: "tray.full")
+                Label("\(needs.count) active needs", systemImage: "tray.full")
                     .font(.system(size: 12)).foregroundStyle(Color.pantrySecondary)
                 if fb.coldStorage {
                     Label("Cold storage", systemImage: "snowflake").font(.system(size: 11, weight: .semibold))
@@ -152,6 +174,30 @@ struct DonorMapView: View {
             }
             if !fb.operatingHours.isEmpty {
                 Label(fb.operatingHours, systemImage: "clock").font(.system(size: 11)).foregroundStyle(Color.pantryTextMuted)
+            }
+            // This pantry's open requests — tap one to claim it.
+            if !needs.isEmpty {
+                Divider().overlay(Color.pantryDivider)
+                Text("THEIR REQUESTS").font(.system(size: 10, weight: .bold)).foregroundStyle(Color.pantrySecondary)
+                ForEach(needs.prefix(3)) { req in
+                    Button { selection = nil; claimTarget = req } label: {
+                        HStack(spacing: 8) {
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(req.title).font(.system(size: 12.5, weight: .semibold)).foregroundStyle(Color.pantryTextDark)
+                                Text("\(req.quantityRemaining) of \(req.quantityNeeded) needed • \(req.category)")
+                                    .font(.system(size: 10.5)).foregroundStyle(Color.pantrySecondary)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold)).foregroundStyle(Color.pantryPrimary)
+                        }
+                        .padding(.vertical, 6).padding(.horizontal, 8)
+                        .background(Color.pantryFieldFill, in: .rect(cornerRadius: 8))
+                    }
+                    .buttonStyle(.plain)
+                }
+                if needs.count > 3 {
+                    Text("+\(needs.count - 3) more in Needs").font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.pantryPrimary)
+                }
             }
             Button {
                 dirTarget = DirTarget(
