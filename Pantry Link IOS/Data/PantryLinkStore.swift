@@ -25,9 +25,17 @@ actor PantryLinkStore {
     // mutation runs on this actor, the read-then-write is race-free.
 
     private func nextId<T: PersistentModel & IntIdentified>(_ type: T.Type) throws -> Int {
-        var descriptor = FetchDescriptor<T>(sortBy: [SortDescriptor(\.entityID, order: .reverse)])
-        descriptor.fetchLimit = 1
-        let maxId = try modelContext.fetch(descriptor).first?.entityID ?? 0
+        // ⚠️ Do NOT sort this generic fetch by `\.entityID`. In a generic context
+        // (`T: PersistentModel & IntIdentified`) that keypath points at the `IntIdentified`
+        // *protocol requirement*, not a concrete `@Model` stored property. On a real device
+        // the (optimized) SwiftData framework can't map that generic protocol keypath to a
+        // persisted column and traps with an internal assertion (EXC_BREAKPOINT in SwiftData,
+        // deep in a fetch) — this was the "Reserve button crashes on device" bug. It never
+        // reproduced in the simulator or in-memory store, only on-device Release builds.
+        // Concrete-type sorts (see allRequests()) are fine; only this generic one was affected.
+        // Fetch unsorted and compute the max id in Swift — these tables are tiny.
+        let all = try modelContext.fetch(FetchDescriptor<T>())
+        let maxId = all.reduce(0) { Swift.max($0, $1.entityID) }
         return maxId + 1
     }
 
