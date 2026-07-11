@@ -25,10 +25,10 @@ struct Pantry_Link_IOSApp: App {
                 session: PantryUserSession(email: "demo-fb@local", uid: "uitest-fb", isDemo: true),
                 role: "Food Bank", profile: p)
         } else if args.contains("-uitestDonor") {
-            var p = UserProfile(email: "demo-donor@local", role: "Donor", name: "Npatel012010", phone: "5550001111")
+            var p = UserProfile(email: "pantrylinkgeorgia@gmail.com", role: "Donor", name: "Neil Mendpara", phone: "(770) 555-0142")
             p.isDemo = true; p.donorZip = "30308"
             PantrySessionStore().save(
-                session: PantryUserSession(email: "demo-donor@local", uid: "uitest-donor", isDemo: true),
+                session: PantryUserSession(email: "pantrylinkgeorgia@gmail.com", uid: "uitest-donor", isDemo: true),
                 role: "Donor", profile: p)
         } else if args.contains("-uitestSignedOut") {
             PantrySessionStore().clear()

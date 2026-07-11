@@ -12,16 +12,27 @@ import SwiftUI
 struct DonorWorkspaceView: View {
     @Bindable var viewModel: PantryLinkViewModel
     @State private var claimTarget: RequestDTO?
+    @State private var selectedTab: Int = DonorWorkspaceView.initialTab
+
+    // DEBUG-only: lets screenshot tooling open a specific tab via a launch argument
+    // (e.g. `-uitestTab 2`). Compiled out of Release builds.
+    static var initialTab: Int {
+        #if DEBUG
+        let a = ProcessInfo.processInfo.arguments
+        if let i = a.firstIndex(of: "-uitestTab"), i + 1 < a.count, let n = Int(a[i + 1]) { return n }
+        #endif
+        return 0
+    }
 
     var body: some View {
-        TabView {
-            Tab("Dashboard", systemImage: "house.fill") {
+        TabView(selection: $selectedTab) {
+            Tab("Dashboard", systemImage: "house.fill", value: 0) {
                 NavigationStack {
                     DonorDashboardView(viewModel: viewModel, claimTarget: $claimTarget)
                         .workspaceChrome("Dashboard", viewModel: viewModel)
                 }
             }
-            Tab("Needs", systemImage: "list.clipboard.fill") {
+            Tab("Needs", systemImage: "list.clipboard.fill", value: 1) {
                 NavigationStack {
                     DonorBrowseView(viewModel: viewModel, claimTarget: $claimTarget)
                         .workspaceChrome("Needs", viewModel: viewModel)
@@ -30,19 +41,19 @@ struct DonorWorkspaceView: View {
                                     prompt: "Search food banks, items, cities")
                 }
             }
-            Tab("Map Finder", systemImage: "map.fill") {
+            Tab("Map Finder", systemImage: "map.fill", value: 2) {
                 NavigationStack {
                     DonorMapView(viewModel: viewModel)
                         .workspaceChrome("Map Finder", large: false, viewModel: viewModel)
                 }
             }
-            Tab("My Claims", systemImage: "shippingbox.fill") {
+            Tab("My Claims", systemImage: "shippingbox.fill", value: 3) {
                 NavigationStack {
                     DonorClaimsView(viewModel: viewModel)
                         .workspaceChrome("My Claims", viewModel: viewModel)
                 }
             }
-            Tab("Account", systemImage: "person.crop.circle.fill") {
+            Tab("Account", systemImage: "person.crop.circle.fill", value: 4) {
                 NavigationStack {
                     DonorAccountView(viewModel: viewModel)
                         .workspaceChrome("Account", viewModel: viewModel)

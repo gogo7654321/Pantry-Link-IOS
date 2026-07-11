@@ -79,7 +79,9 @@ struct RootView: View {
         // Ask for notification permission once the scene is active (requesting from the view-model
         // init is too early — iOS silently drops the prompt before there's an active scene).
         .task {
-            if viewModel.pushNotificationsEnabled { PantryNotifications.requestAuthorization() }
+            // Don't prompt during UI-test / screenshot launches (a system alert would block them).
+            let isUITest = ProcessInfo.processInfo.arguments.contains { $0.hasPrefix("-uitest") }
+            if viewModel.pushNotificationsEnabled && !isUITest { PantryNotifications.requestAuthorization() }
         }
         .animation(.easeInOut, value: viewModel.toastMessage)
         .animation(.easeInOut, value: viewModel.activePushAlert)
