@@ -19,6 +19,7 @@ struct AuthGateView: View {
 
     // Mode
     @State private var isSignUp = false
+    @State private var signUpStep = 1        // 1 = account basics, 2 = role-specific details
     @State private var agreedToTerms = false
     @State private var loading = false
     @State private var errorMessage: String?
@@ -78,13 +79,11 @@ struct AuthGateView: View {
     private var card: some View {
         VStack(spacing: 14) {
             logo
-            Text(isSignUp ? "Create Partner Account" : "Community Portal Sign In")
+            Text(cardTitle)
                 .font(.system(size: 19, weight: .heavy))
                 .foregroundStyle(Color.pantryPrimary)
                 .multilineTextAlignment(.center)
-            Text(isSignUp
-                 ? "Register to coordinate and track stock across Georgia"
-                 : "Access your Georgia PantryLink dashboard and claims")
+            Text(cardSubtitle)
                 .font(.system(size: 12))
                 .foregroundStyle(Color.pantryTextMuted)
                 .multilineTextAlignment(.center)
@@ -99,22 +98,24 @@ struct AuthGateView: View {
                     .multilineTextAlignment(.center)
             }
 
-            if isSignUp { signUpFields }
-
-            PantryField(title: "Email Address", systemImage: "envelope", text: $email, contentType: .username)
-                .textInputAutocapitalization(.never)
-                .keyboardType(.emailAddress)
-            // Sign-up: `.newPassword` so iOS offers a generated strong password + prompts to save it to
-            // iCloud Keychain. Sign-in: `.password` so iOS AutoFills an existing saved credential.
-            PantryField(title: "Password", systemImage: "lock", text: $password, secure: true,
-                        contentType: isSignUp ? .newPassword : .password)
-
-            if isSignUp { termsRow }
-
-            if loading {
-                ProgressView().padding(.vertical, 6)
+            if !isSignUp {
+                // ── Sign in ──
+                credentialFields
+                if loading { ProgressView().padding(.vertical, 6) } else { actionButtons }
+            } else if signUpStep == 1 {
+                // ── Sign up · Step 1: account basics only (don't bombard) ──
+                stepBadge("Step 1 of 2 · Account basics")
+                basicsFields
+                credentialFields
+                termsRow
+                if loading { ProgressView().padding(.vertical, 6) } else { step1Buttons }
             } else {
-                actionButtons
+                // ── Sign up · Step 2: role-specific details ──
+                stepBadge(role == PantryRole.donor.rawValue
+                          ? "Step 2 of 2 · Donation details"
+                          : "Step 2 of 2 · Pantry details")
+                if role == PantryRole.donor.rawValue { donorProfileFields } else { foodBankProfileFields }
+                if loading { ProgressView().padding(.vertical, 6) } else { step2Buttons }
             }
         }
         .padding(24)
@@ -137,8 +138,19 @@ struct AuthGateView: View {
 
     // MARK: - Sign-up fields
 
-    @ViewBuilder private var signUpFields: some View {
-        // Role selector
+    /// Email + password, shared by sign-in and sign-up step 1.
+    @ViewBuilder private var credentialFields: some View {
+        PantryField(title: "Email Address", systemImage: "envelope", text: $email, contentType: .username)
+            .textInputAutocapitalization(.never)
+            .keyboardType(.emailAddress)
+        // Sign-up: `.newPassword` so iOS offers a generated strong password + prompts to save it to
+        // iCloud Keychain. Sign-in: `.password` so iOS AutoFills an existing saved credential.
+        PantryField(title: "Password", systemImage: "lock", text: $password, secure: true,
+                    contentType: isSignUp ? .newPassword : .password)
+    }
+
+    /// Step 1 — the basics: role, name, phone (the specifics come on step 2).
+    @ViewBuilder private var basicsFields: some View {
         sectionLabel("I want to join as a:", color: .pantrySecondary)
         HStack(spacing: 10) {
             roleButton("Donor", systemImage: "hands.sparkles")
@@ -157,8 +169,6 @@ struct AuthGateView: View {
 
         PantryField(title: "Contact Phone", systemImage: "phone", text: $phone)
             .keyboardType(.phonePad)
-
-        if role == PantryRole.donor.rawValue { donorProfileFields } else { foodBankProfileFields }
     }
 
     @ViewBuilder private var donorProfileFields: some View {
@@ -250,10 +260,11 @@ struct AuthGateView: View {
 
     // MARK: - Buttons
 
+    /// Sign-in screen buttons.
     private var actionButtons: some View {
         VStack(spacing: 8) {
             Button(action: submit) {
-                Text(isSignUp ? "Register now" : "Sign In")
+                Text("Sign In")
                     .font(.system(size: 14, weight: .bold))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 6)
@@ -263,21 +274,70 @@ struct AuthGateView: View {
             .accessibilityIdentifier("auth_submit")
 
             Button {
-                isSignUp.toggle()
-                errorMessage = nil
+                isSignUp = true; signUpStep = 1; errorMessage = nil
             } label: {
-                Text(isSignUp ? "Already have an account? Sign In" : "Don't have an account yet? Create one")
+                Text("Don't have an account yet? Create one")
                     .font(.system(size: 12, weight: .bold))
                     .foregroundStyle(Color.pantryPrimary)
             }
+            legalRow
+        }
+    }
 
+    /// Step 1 (basics) buttons: advance to details, or switch to sign-in.
+    private var step1Buttons: some View {
+        VStack(spacing: 8) {
+            Button(action: goToDetails) {
+                Label("Next", systemImage: "arrow.right")
+                    .font(.system(size: 14, weight: .bold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 6)
+            }
+            .buttonStyle(.glassProminent)
+            .tint(Color.pantryPrimary)
+            .accessibilityIdentifier("auth_next")
+
+            Button {
+                isSignUp = false; signUpStep = 1; errorMessage = nil
+            } label: {
+                Text("Already have an account? Sign In")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(Color.pantryPrimary)
+            }
+            legalRow
+        }
+    }
+
+    /// Step 2 (details) buttons: register, or go back to the basics.
+    private var step2Buttons: some View {
+        VStack(spacing: 8) {
+            Button(action: submit) {
+                Text("Register now")
+                    .font(.system(size: 14, weight: .bold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 6)
+            }
+            .buttonStyle(.glassProminent)
+            .tint(Color.pantryPrimary)
+            .accessibilityIdentifier("auth_submit")
+
+            Button {
+                withAnimation { signUpStep = 1 }; errorMessage = nil
+            } label: {
+                Label("Back to basics", systemImage: "chevron.left")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(Color.pantryPrimary)
+            }
+        }
+    }
+
+    /// Legal + support links, accessible before sign-in (also required-ish for App Review).
+    private var legalRow: some View {
+        VStack(spacing: 8) {
             Text("By using this service, you agree to our Terms of Service.")
                 .font(.system(size: 10)).foregroundStyle(Color.pantryTextMuted)
                 .multilineTextAlignment(.center)
-
             Divider().overlay(Color.pantryDivider).padding(.vertical, 4)
-
-            // Legal + support, accessible before sign-in.
             HStack(spacing: 14) {
                 Button("Terms") { showTerms = true }
                 Text("·").foregroundStyle(Color.pantryTextMuted)
@@ -289,6 +349,45 @@ struct AuthGateView: View {
             .tint(Color.pantryPrimary)
             .foregroundStyle(Color.pantryPrimary)
         }
+    }
+
+    private var cardTitle: String {
+        if !isSignUp { return "Community Portal Sign In" }
+        return signUpStep == 1 ? "Create Partner Account" : "Almost there!"
+    }
+
+    private var cardSubtitle: String {
+        if !isSignUp { return "Access your Georgia PantryLink dashboard and claims" }
+        return signUpStep == 1
+            ? "Start with the basics — you'll add a few details next"
+            : "Just a few details so we can match you with the right needs"
+    }
+
+    private func stepBadge(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 10.5, weight: .bold))
+            .foregroundStyle(Color.pantryPrimary)
+            .padding(.horizontal, 10).padding(.vertical, 5)
+            .background(Color.pantryPrimaryContainer, in: .capsule)
+            .frame(maxWidth: .infinity, alignment: .center)
+    }
+
+    /// Validate the basics before advancing to the details step.
+    private func goToDetails() {
+        errorMessage = nil
+        let nameOk = role == PantryRole.donor.rawValue
+            ? !(donorFirstName.isBlank && donorLastName.isBlank)
+            : !name.isBlank
+        if !nameOk {
+            errorMessage = role == PantryRole.donor.rawValue
+                ? "Please enter your first and last name."
+                : "Please enter your food bank name."
+            return
+        }
+        if !PantryLinkViewModel.isValidEmail(email) { errorMessage = "Please enter a valid email address."; return }
+        if password.count < 6 { errorMessage = "Password must be at least 6 characters."; return }
+        if !agreedToTerms { errorMessage = "You must agree to the Terms of Service to register."; return }
+        withAnimation { signUpStep = 2 }
     }
 
     // MARK: - Actions
@@ -386,19 +485,34 @@ struct PantryField: View {
     var secure: Bool = false
     var contentType: UITextContentType? = nil
 
+    // For secure fields: whether the password is currently revealed (tap the eye to toggle).
+    @State private var reveal = false
+
     var body: some View {
         HStack(spacing: 8) {
             if let systemImage {
                 Image(systemName: systemImage).font(.system(size: 14)).foregroundStyle(Color.pantryTextMuted)
             }
             Group {
-                if secure {
+                if secure && !reveal {
                     SecureField(title, text: $text).textContentType(contentType)
                 } else {
                     TextField(title, text: $text).textContentType(contentType)
+                        // Revealed passwords shouldn't be autocorrected or auto-capitalized.
+                        .autocorrectionDisabled(secure)
+                        .textInputAutocapitalization(secure ? .never : .sentences)
                 }
             }
             .font(.system(size: 14))
+            // Show/hide eye — only on secure fields.
+            if secure {
+                Button { reveal.toggle() } label: {
+                    Image(systemName: reveal ? "eye.slash.fill" : "eye.fill")
+                        .font(.system(size: 14)).foregroundStyle(Color.pantryTextMuted)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(reveal ? "Hide password" : "Show password")
+            }
         }
         .padding(.horizontal, 14).padding(.vertical, 14)
         .background(Color.pantryFieldFill, in: .rect(cornerRadius: 12))
