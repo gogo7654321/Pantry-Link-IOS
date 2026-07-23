@@ -46,11 +46,11 @@ struct FBActiveNeedsView: View {
             VStack(alignment: .leading, spacing: 16) {
                 header("📋 Partner Request Management",
                        "Shared backend source-of-truth. Closes requests when requirements are confirmed.")
-                if viewModel.requests.isEmpty {
+                if viewModel.myRequests.isEmpty {
                     EmptyStateCard(icon: "shippingbox", title: "No needs posted yet.",
                                    subtitle: "Tap 'Post Requests' to list items donors can fulfill.")
                 } else {
-                    ForEach(viewModel.requests) { req in needCard(req) }
+                    ForEach(viewModel.myRequests) { req in needCard(req) }
                 }
             }
             .padding(16)
@@ -194,7 +194,7 @@ struct FBVerifyDropsView: View {
     @State private var rejectTarget: ClaimDTO?
     @State private var actionCount = 0
 
-    private var drops: [ClaimDTO] { viewModel.allClaims.filter { $0.claimStatus == "Dropped Off" } }
+    private var drops: [ClaimDTO] { viewModel.myClaims.filter { $0.claimStatus == "Dropped Off" } }
 
     var body: some View {
         ScrollView {
@@ -282,10 +282,10 @@ struct FBAuditView: View {
             VStack(alignment: .leading, spacing: 16) {
                 header("✒️ Permanent Audit Logs",
                        "Electronic traces of donor submissions, approvals, cancels and system releases.")
-                if viewModel.auditLogs.isEmpty {
+                if viewModel.myAuditLogs.isEmpty {
                     EmptyStateCard(icon: "clock.arrow.circlepath", title: "No actions logged yet.", subtitle: "")
                 } else {
-                    ForEach(viewModel.auditLogs) { log in logCard(log) }
+                    ForEach(viewModel.myAuditLogs) { log in logCard(log) }
                 }
             }
             .padding(16)

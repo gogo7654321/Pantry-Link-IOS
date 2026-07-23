@@ -166,6 +166,10 @@ final class FirestorePantrySync: PantrySyncManager, @unchecked Sendable {
     private static func parseRequest(_ doc: QueryDocumentSnapshot) -> RequestDTO? {
         guard let id = Int(doc.documentID) else { return nil }
         let d = doc.data()
+        let needed = (d["quantityNeeded"] as? NSNumber)?.intValue ?? 0
+        // A doc missing quantityRemaining means "nothing claimed yet" → full amount remains,
+        // NOT zero. Defaulting to 0 made unclaimed requests read as "fully fulfilled".
+        let remaining = (d["quantityRemaining"] as? NSNumber)?.intValue ?? needed
         return RequestDTO(
             id: id,
             foodBankId: (d["foodBankId"] as? NSNumber)?.intValue ?? 1,
@@ -173,8 +177,8 @@ final class FirestorePantrySync: PantrySyncManager, @unchecked Sendable {
             title: d["title"] as? String ?? "",
             category: d["category"] as? String ?? "",
             itemDescription: d["itemDescription"] as? String ?? "",
-            quantityNeeded: (d["quantityNeeded"] as? NSNumber)?.intValue ?? 0,
-            quantityRemaining: (d["quantityRemaining"] as? NSNumber)?.intValue ?? 0,
+            quantityNeeded: needed,
+            quantityRemaining: remaining,
             deadline: d["deadline"] as? String ?? "",
             dropOffLocation: d["dropOffLocation"] as? String ?? "",
             extraNotes: d["extraNotes"] as? String ?? "",

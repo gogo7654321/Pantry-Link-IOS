@@ -16,7 +16,9 @@ struct RequestCard: View {
     let distance: Double
     let onClaim: () -> Void
 
-    private var fulfilled: Bool { request.quantityRemaining == 0 }
+    // Only "fulfilled" when the request actually asked for something and none remains — a request
+    // with a missing/zero quantityNeeded must NOT read as fully fulfilled when nobody claimed it.
+    private var fulfilled: Bool { request.quantityNeeded > 0 && request.quantityRemaining <= 0 }
     private var progress: Double {
         request.quantityNeeded > 0
             ? Double(request.quantityNeeded - request.quantityRemaining) / Double(request.quantityNeeded)

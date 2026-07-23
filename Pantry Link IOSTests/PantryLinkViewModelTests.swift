@@ -170,4 +170,82 @@ struct PantryLinkViewModelTests {
         #expect(vm.diagnostics?.count == 4)
         #expect(vm.diagnostics?.first?.name == "Firebase Auth")
     }
+
+    // MARK: - Food bank scoping (each pantry is its own account)
+
+    @Test("Each food bank only sees its own requests, claims, and audit logs")
+    func foodBankScoping() async throws {
+        // Shared backend (one store) with three separate accounts, like the real shared Firestore.
+        let container = PantryPersistence.makeContainer(inMemory: true)
+        let store = PantryLinkStore(modelContainer: container)
+        let repo = PantryLinkRepository(store: store)
+        func vmFor(_ tag: String) -> PantryLinkViewModel {
+            let d = UserDefaults(suiteName: "scope-\(tag)-\(UUID().uuidString)")!
+            return PantryLinkViewModel(repository: repo, auth: LocalAuthService(defaults: d),
+                                       sessionStore: PantrySessionStore(defaults: d))
+        }
+
+        // Two food banks each sign up and post one request.
+        let a = vmFor("A")
+        _ = await a.signUp(email: "a@x.com", password: "secret1", role: "Food Bank",
+            name: "Pantry A", phone: "1112223333", fbAddress: "1 A St", fbCity: "Atlanta", fbZip: "30308")
+        await a.createRequest(title: "A Beans", category: "Canned Foods", itemDescription: "cans",
+            quantityNeeded: 10, deadline: "2026-12-31", dropOffLocation: "1 A St", extraNotes: "")
+
+        let b = vmFor("B")
+        _ = await b.signUp(email: "b@x.com", password: "secret1", role: "Food Bank",
+            name: "Pantry B", phone: "4445556666", fbAddress: "2 B St", fbCity: "Atlanta", fbZip: "30309")
+        await b.createRequest(title: "B Rice", category: "Dry Goods", itemDescription: "bags",
+            quantityNeeded: 8, deadline: "2026-12-31", dropOffLocation: "2 B St", extraNotes: "")
+
+        await a.refreshAll(); await b.refreshAll()
+
+        // Isolation: each pantry sees ONLY its own request.
+        #expect(a.myRequests.count == 1)
+        #expect(a.myRequests.first?.title == "A Beans")
+        #expect(b.myRequests.count == 1)
+        #expect(b.myRequests.first?.title == "B Rice")
+
+        // Correct attribution: A's request carries A's own id (not 1, not B's).
+        let aId = try #require(a.myFoodBank?.id)
+        let bId = try #require(b.myFoodBank?.id)
+        #expect(aId != 1)
+        #expect(a.myRequests.first?.foodBankId == aId)
+        #expect(a.myRequests.first?.foodBankId != bId)
+
+        // A donor fully-partially claims A's request.
+        let donor = vmFor("D")
+        _ = await donor.signUp(email: "d@x.com", password: "secret1", role: "Donor",
+                               name: "Dana", phone: "9998887777")
+        await donor.refreshAll()
+        let aReqId = try #require(a.myRequests.first?.id)
+        let (claimed, _) = await donor.claimRequest(requestId: aReqId, quantity: 3)
+        #expect(claimed)
+
+        await a.refreshAll(); await b.refreshAll()
+
+        // Claim + audit log show up for A only, never B.
+        #expect(a.myClaims.count == 1)
+        #expect(b.myClaims.isEmpty)
+        #expect(a.myAuditLogs.contains { $0.actionType == AuditAction.claimAccepted.rawValue })
+        #expect(b.myAuditLogs.isEmpty)
+
+        // Quantities are honest: A's request has 7 left (10-3), B's untouched request is NOT
+        // "fulfilled" — it still needs its full 8.
+        #expect(a.myRequests.first?.quantityRemaining == 7)
+        #expect(b.myRequests.first?.quantityRemaining == 8)
+        #expect(b.myRequests.first?.quantityNeeded == 8)
+    }
+
+    @Test("A donor never gets food-bank-scoped collections")
+    func donorHasNoFoodBankScope() async {
+        let (vm, _) = makeVM()
+        _ = await vm.signUp(email: "donor@x.com", password: "secret1", role: "Donor",
+                            name: "D", phone: "5551110000")
+        await vm.refreshAll()
+        #expect(vm.myFoodBank == nil)
+        #expect(vm.myRequests.isEmpty)
+        #expect(vm.myClaims.isEmpty)
+        #expect(vm.myAuditLogs.isEmpty)
+    }
 }

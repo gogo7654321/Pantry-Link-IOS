@@ -543,15 +543,80 @@ final class PantryLinkViewModel {
         }
     }
 
+    // MARK: - Food bank scoping (each pantry sees ONLY its own data — like a normal user)
+    //
+    // A Food Bank account is identified by its login email: the food_banks document it owns carries
+    // that same email (written at sign-up and on every profile save). We resolve "my" food bank by
+    // that match, scope requests by foodBankId, and scope claims/audit logs through requestId
+    // (ClaimDTO/AuditLogDTO don't carry a foodBankId, but every one references a request id).
+
+    /// The food bank owned by the signed-in Food Bank user (nil for donors, or before it loads).
+    var myFoodBank: FoodBankDTO? {
+        let email = currentUserEmail
+        guard !email.isBlank else { return nil }
+        return foodBanks.first { $0.email.caseInsensitiveCompare(email) == .orderedSame }
+    }
+
+    /// Requests THIS food bank posted.
+    var myRequests: [RequestDTO] {
+        guard let id = myFoodBank?.id else { return [] }
+        return requests.filter { $0.foodBankId == id }
+    }
+
+    /// Ids of this food bank's requests — the join key for its claims and audit logs.
+    private var myRequestIds: Set<Int> {
+        guard let id = myFoodBank?.id else { return [] }
+        return Set(requests.filter { $0.foodBankId == id }.map(\.id))
+    }
+
+    /// Claims placed against THIS food bank's requests.
+    var myClaims: [ClaimDTO] {
+        let ids = myRequestIds
+        return allClaims.filter { ids.contains($0.requestId) }
+    }
+
+    /// Audit-trail entries for THIS food bank's requests.
+    var myAuditLogs: [AuditLogDTO] {
+        let ids = myRequestIds
+        return auditLogs.filter { ids.contains($0.requestId) }
+    }
+
+    /// Resolve the signed-in food bank, creating its food_banks record from the profile if it does
+    /// not exist yet — so a posted request is never mis-stamped onto another pantry. Returns nil
+    /// only if there is no Food Bank session/profile.
+    @discardableResult
+    private func ensureMyFoodBank() async -> FoodBankDTO? {
+        if let existing = myFoodBank { return existing }
+        // The list may just be stale — refresh once before concluding the record is missing,
+        // so we never create a duplicate food_banks doc for an account that already has one.
+        await refreshAll()
+        if let existing = myFoodBank { return existing }
+        guard selectedRole == PantryRole.foodBank.rawValue,
+              let session = userSession, let profile = currentUserProfile,
+              !session.email.isBlank else { return nil }
+        let newId = Int.random(in: 1000...99999)
+        await saveFoodBankLocally(
+            id: newId, name: profile.name, address: profile.fbAddress, zipCode: profile.fbZip,
+            city: profile.fbCity, phone: profile.phone, email: session.email,
+            size: profile.fbSize, hours: profile.fbHours, coldStorage: profile.fbColdStorage)
+        await refreshAll()
+        return myFoodBank
+    }
+
     func createRequest(
         title: String, category: String, itemDescription: String,
         quantityNeeded: Int, deadline: String, dropOffLocation: String, extraNotes: String
     ) async {
-        let foodBank = foodBanks.first { $0.phone == "470-209-1835" } ?? foodBanks.first
+        // Stamp the request with the CURRENT food bank (not a hardcoded/first one), so it shows up
+        // only under this pantry — and everyone else's dashboards stay clean.
+        guard let foodBank = await ensureMyFoodBank() else {
+            showToast("Couldn't identify your pantry. Finish your profile before posting requests.")
+            return
+        }
         let request = RequestDTO(
             id: 0,
-            foodBankId: foodBank?.id ?? 1,
-            foodBankName: foodBank?.name ?? "Local Georgia Food Bank",
+            foodBankId: foodBank.id,
+            foodBankName: foodBank.name,
             title: title, category: category, itemDescription: itemDescription,
             quantityNeeded: quantityNeeded, quantityRemaining: quantityNeeded,
             deadline: deadline, dropOffLocation: dropOffLocation, extraNotes: extraNotes,
