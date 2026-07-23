@@ -80,28 +80,57 @@ final class FirestorePantrySync: PantrySyncManager, @unchecked Sendable {
     func startListening(onChange: @escaping @Sendable () -> Void) {
         stopListening()
 
+        // Each listener upserts the current documents, then — only on an authoritative SERVER
+        // snapshot (never a possibly-stale/empty cache snapshot, which would wrongly wipe local
+        // data while offline) — prunes any local row the server no longer has. `documents` already
+        // includes our own pending local writes (Firestore latency compensation), so pruning never
+        // removes a doc this device just created but hasn't finished pushing.
         listeners.append(db.collection("food_banks").addSnapshotListener { [store] snap, _ in
-            guard let docs = snap?.documents, !docs.isEmpty else { return }
-            let banks = docs.compactMap { Self.parseFoodBank($0) }
-            Task { for b in banks { try? await store.insertFoodBank(b) }; await MainActor.run(body: onChange) }
+            guard let snap else { return }
+            let banks = snap.documents.compactMap { Self.parseFoodBank($0) }
+            let liveIds = Set(snap.documents.compactMap { Int($0.documentID) })
+            let canPrune = !snap.metadata.isFromCache
+            Task {
+                for b in banks { try? await store.insertFoodBank(b) }
+                if canPrune { try? await store.pruneFoodBanks(keeping: liveIds) }
+                await MainActor.run(body: onChange)
+            }
         })
 
         listeners.append(db.collection("requests").addSnapshotListener { [store] snap, _ in
-            guard let docs = snap?.documents, !docs.isEmpty else { return }
-            let reqs = docs.compactMap { Self.parseRequest($0) }
-            Task { for r in reqs { try? await store.insertRequest(r) }; await MainActor.run(body: onChange) }
+            guard let snap else { return }
+            let reqs = snap.documents.compactMap { Self.parseRequest($0) }
+            let liveIds = Set(snap.documents.compactMap { Int($0.documentID) })
+            let canPrune = !snap.metadata.isFromCache
+            Task {
+                for r in reqs { try? await store.insertRequest(r) }
+                if canPrune { try? await store.pruneRequests(keeping: liveIds) }
+                await MainActor.run(body: onChange)
+            }
         })
 
         listeners.append(db.collection("claims").addSnapshotListener { [store] snap, _ in
-            guard let docs = snap?.documents, !docs.isEmpty else { return }
-            let claims = docs.compactMap { Self.parseClaim($0) }
-            Task { for c in claims { try? await store.upsertClaim(c) }; await MainActor.run(body: onChange) }
+            guard let snap else { return }
+            let claims = snap.documents.compactMap { Self.parseClaim($0) }
+            let liveIds = Set(snap.documents.compactMap { Int($0.documentID) })
+            let canPrune = !snap.metadata.isFromCache
+            Task {
+                for c in claims { try? await store.upsertClaim(c) }
+                if canPrune { try? await store.pruneClaims(keeping: liveIds) }
+                await MainActor.run(body: onChange)
+            }
         })
 
         listeners.append(db.collection("audit_logs").addSnapshotListener { [store] snap, _ in
-            guard let docs = snap?.documents, !docs.isEmpty else { return }
-            let logs = docs.compactMap { Self.parseAuditLog($0) }
-            Task { for l in logs { try? await store.upsertAuditLog(l) }; await MainActor.run(body: onChange) }
+            guard let snap else { return }
+            let logs = snap.documents.compactMap { Self.parseAuditLog($0) }
+            let liveIds = Set(snap.documents.compactMap { Int($0.documentID) })
+            let canPrune = !snap.metadata.isFromCache
+            Task {
+                for l in logs { try? await store.upsertAuditLog(l) }
+                if canPrune { try? await store.pruneAuditLogs(keeping: liveIds) }
+                await MainActor.run(body: onChange)
+            }
         })
     }
 

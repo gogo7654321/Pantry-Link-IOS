@@ -326,6 +326,44 @@ actor PantryLinkStore {
     }
 
     // =====================================================================================
+    // MARK: - Reconciliation (mirror server deletions into the local store)
+    //
+    // The Firestore snapshot listeners only ever upsert, so a document deleted on the server
+    // used to linger in the local store forever (it kept showing on the map / in lists until
+    // reinstall). These prune helpers take the authoritative set of ids currently on the
+    // server and delete any local row that is no longer present — clearing both live deletions
+    // and orphans that were already deleted before this device started listening.
+    // =====================================================================================
+
+    func pruneFoodBanks(keeping ids: Set<Int>) throws {
+        let all = try modelContext.fetch(FetchDescriptor<FoodBank>())
+        var changed = false
+        for row in all where !ids.contains(row.entityID) { modelContext.delete(row); changed = true }
+        if changed { try save() }
+    }
+
+    func pruneRequests(keeping ids: Set<Int>) throws {
+        let all = try modelContext.fetch(FetchDescriptor<PantryRequest>())
+        var changed = false
+        for row in all where !ids.contains(row.entityID) { modelContext.delete(row); changed = true }
+        if changed { try save() }
+    }
+
+    func pruneClaims(keeping ids: Set<Int>) throws {
+        let all = try modelContext.fetch(FetchDescriptor<Claim>())
+        var changed = false
+        for row in all where !ids.contains(row.entityID) { modelContext.delete(row); changed = true }
+        if changed { try save() }
+    }
+
+    func pruneAuditLogs(keeping ids: Set<Int>) throws {
+        let all = try modelContext.fetch(FetchDescriptor<AuditLog>())
+        var changed = false
+        for row in all where !ids.contains(row.entityID) { modelContext.delete(row); changed = true }
+        if changed { try save() }
+    }
+
+    // =====================================================================================
     // MARK: - Transaction-safe operations (the "backend" simulation)
     //         1:1 port of the Kotlin @Transaction functions.
     // =====================================================================================

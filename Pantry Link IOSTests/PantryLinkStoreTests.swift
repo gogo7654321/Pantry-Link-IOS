@@ -240,4 +240,41 @@ struct PantryLinkStoreTests {
         #expect(a == 1)
         #expect(b == 2)
     }
+
+    // MARK: - reconciliation (server deletions must clear local rows)
+
+    @Test("pruneFoodBanks removes local banks the server no longer has, keeps the rest")
+    func pruneRemovesOrphanFoodBanks() async throws {
+        let store = makeStore()
+        try await store.insertFoodBank(FoodBankDTO(
+            id: 101, name: "Real Pantry", address: "1 A St", zipCode: "30303", city: "Atlanta",
+            state: "GA", latitude: 33.75, longitude: -84.39, phone: "", email: "real@x",
+            verified: true, size: "", operatingHours: "", coldStorage: false))
+        try await store.insertFoodBank(FoodBankDTO(
+            id: 999, name: "must (deleted test bank)", address: "2 B St", zipCode: "30303",
+            city: "Atlanta", state: "GA", latitude: 33.76, longitude: -84.40, phone: "", email: "must@x",
+            verified: true, size: "", operatingHours: "", coldStorage: false))
+        #expect(try await store.allFoodBanks().count == 2)
+
+        // Server now only has id 101 → the stale "must" (999) must be pruned locally.
+        try await store.pruneFoodBanks(keeping: [101])
+
+        let remaining = try await store.allFoodBanks()
+        #expect(remaining.count == 1)
+        #expect(remaining.first?.id == 101)
+        #expect(!remaining.contains { $0.name.contains("must") })
+    }
+
+    @Test("pruneRequests clears orphaned requests")
+    func pruneRemovesOrphanRequests() async throws {
+        let store = makeStore()
+        let keep = try await seedRequest(store, needed: 3)
+        let drop = try await seedRequest(store, needed: 3)
+        #expect(try await store.allRequests().count == 2)
+        try await store.pruneRequests(keeping: [keep])
+        let reqs = try await store.allRequests()
+        #expect(reqs.count == 1)
+        #expect(reqs.first?.id == keep)
+        #expect(try await store.request(id: drop) == nil)
+    }
 }
