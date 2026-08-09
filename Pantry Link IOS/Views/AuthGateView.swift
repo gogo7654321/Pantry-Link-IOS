@@ -549,6 +549,10 @@ struct ChipGrid: View {
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 10).padding(.horizontal, 6)
+                    // Make the ENTIRE chip tappable, not just where the text sits — otherwise the
+                    // empty space of a wide (single-column) chip ignores taps, so facility-size
+                    // buttons felt "unclickable" unless you happened to hit the label directly.
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(selected ? Color.pantryPrimary : Color.pantryTextMuted)
