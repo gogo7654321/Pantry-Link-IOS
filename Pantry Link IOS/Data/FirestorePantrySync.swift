@@ -32,7 +32,7 @@ final class FirestorePantrySync: PantrySyncManager, @unchecked Sendable {
             "title": r.title, "category": r.category, "itemDescription": r.itemDescription,
             "quantityNeeded": r.quantityNeeded, "quantityRemaining": r.quantityRemaining,
             "deadline": r.deadline, "dropOffLocation": r.dropOffLocation,
-            "extraNotes": r.extraNotes, "status": r.status
+            "extraNotes": r.extraNotes, "status": r.status, "amazonUrl": r.amazonUrl
         ])
     }
 
@@ -45,7 +45,8 @@ final class FirestorePantrySync: PantrySyncManager, @unchecked Sendable {
             "claimStatus": c.claimStatus,
             "dropoffConfirmationTimestamp": c.dropoffConfirmationTimestamp ?? 0,
             "foodBankReviewResult": c.foodBankReviewResult ?? "",
-            "rejectionReason": c.rejectionReason ?? ""
+            "rejectionReason": c.rejectionReason ?? "",
+            "receiptImage": c.receiptImage ?? ""
         ])
     }
 
@@ -89,7 +90,10 @@ final class FirestorePantrySync: PantrySyncManager, @unchecked Sendable {
             guard let snap else { return }
             let banks = snap.documents.compactMap { Self.parseFoodBank($0) }
             let liveIds = Set(snap.documents.compactMap { Int($0.documentID) })
-            let canPrune = !snap.metadata.isFromCache
+            // Only prune on an authoritative SERVER snapshot that actually returned documents.
+            // Never prune on an EMPTY server snapshot — a transient/permission-related empty result
+            // would otherwise wipe every locally-known row (e.g. all food banks vanish from the map).
+            let canPrune = !snap.metadata.isFromCache && !snap.documents.isEmpty
             Task {
                 for b in banks { try? await store.insertFoodBank(b) }
                 if canPrune { try? await store.pruneFoodBanks(keeping: liveIds) }
@@ -101,7 +105,10 @@ final class FirestorePantrySync: PantrySyncManager, @unchecked Sendable {
             guard let snap else { return }
             let reqs = snap.documents.compactMap { Self.parseRequest($0) }
             let liveIds = Set(snap.documents.compactMap { Int($0.documentID) })
-            let canPrune = !snap.metadata.isFromCache
+            // Only prune on an authoritative SERVER snapshot that actually returned documents.
+            // Never prune on an EMPTY server snapshot — a transient/permission-related empty result
+            // would otherwise wipe every locally-known row (e.g. all food banks vanish from the map).
+            let canPrune = !snap.metadata.isFromCache && !snap.documents.isEmpty
             Task {
                 for r in reqs { try? await store.insertRequest(r) }
                 if canPrune { try? await store.pruneRequests(keeping: liveIds) }
@@ -113,7 +120,10 @@ final class FirestorePantrySync: PantrySyncManager, @unchecked Sendable {
             guard let snap else { return }
             let claims = snap.documents.compactMap { Self.parseClaim($0) }
             let liveIds = Set(snap.documents.compactMap { Int($0.documentID) })
-            let canPrune = !snap.metadata.isFromCache
+            // Only prune on an authoritative SERVER snapshot that actually returned documents.
+            // Never prune on an EMPTY server snapshot — a transient/permission-related empty result
+            // would otherwise wipe every locally-known row (e.g. all food banks vanish from the map).
+            let canPrune = !snap.metadata.isFromCache && !snap.documents.isEmpty
             Task {
                 for c in claims { try? await store.upsertClaim(c) }
                 if canPrune { try? await store.pruneClaims(keeping: liveIds) }
@@ -125,7 +135,10 @@ final class FirestorePantrySync: PantrySyncManager, @unchecked Sendable {
             guard let snap else { return }
             let logs = snap.documents.compactMap { Self.parseAuditLog($0) }
             let liveIds = Set(snap.documents.compactMap { Int($0.documentID) })
-            let canPrune = !snap.metadata.isFromCache
+            // Only prune on an authoritative SERVER snapshot that actually returned documents.
+            // Never prune on an EMPTY server snapshot — a transient/permission-related empty result
+            // would otherwise wipe every locally-known row (e.g. all food banks vanish from the map).
+            let canPrune = !snap.metadata.isFromCache && !snap.documents.isEmpty
             Task {
                 for l in logs { try? await store.upsertAuditLog(l) }
                 if canPrune { try? await store.pruneAuditLogs(keeping: liveIds) }
@@ -182,7 +195,8 @@ final class FirestorePantrySync: PantrySyncManager, @unchecked Sendable {
             deadline: d["deadline"] as? String ?? "",
             dropOffLocation: d["dropOffLocation"] as? String ?? "",
             extraNotes: d["extraNotes"] as? String ?? "",
-            status: d["status"] as? String ?? "Posted"
+            status: d["status"] as? String ?? "Posted",
+            amazonUrl: d["amazonUrl"] as? String ?? ""
         )
     }
 
@@ -195,6 +209,8 @@ final class FirestorePantrySync: PantrySyncManager, @unchecked Sendable {
         let review = (reviewRaw?.isEmpty ?? true) ? nil : reviewRaw
         let rejRaw = d["rejectionReason"] as? String
         let rejection = (rejRaw?.isEmpty ?? true) ? nil : rejRaw
+        let receiptRaw = d["receiptImage"] as? String
+        let receipt = (receiptRaw?.isEmpty ?? true) ? nil : receiptRaw
         return ClaimDTO(
             id: id,
             requestId: (d["requestId"] as? NSNumber)?.intValue ?? 0,
@@ -206,7 +222,8 @@ final class FirestorePantrySync: PantrySyncManager, @unchecked Sendable {
             claimStatus: d["claimStatus"] as? String ?? "Claimed",
             dropoffConfirmationTimestamp: dropoff,
             foodBankReviewResult: review,
-            rejectionReason: rejection
+            rejectionReason: rejection,
+            receiptImage: receipt
         )
     }
 

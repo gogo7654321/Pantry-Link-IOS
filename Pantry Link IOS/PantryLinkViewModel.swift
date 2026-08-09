@@ -14,6 +14,7 @@
 
 import Foundation
 import Observation
+import CoreLocation
 
 @MainActor
 @Observable
@@ -272,6 +273,8 @@ final class PantryLinkViewModel {
         fbSize: String = "",
         fbHours: String = "",
         fbColdStorage: Bool = false,
+        fbLatitude: Double? = nil,
+        fbLongitude: Double? = nil,
         donorZip: String = "",
         donorCity: String = "",
         donorCanServeType: String = "",
@@ -326,7 +329,8 @@ final class PantryLinkViewModel {
                 await saveFoodBankLocally(
                     id: newFbId, name: trimmedName, address: profile.fbAddress, zipCode: profile.fbZip,
                     city: profile.fbCity, phone: trimmedPhone, email: trimmedEmail,
-                    size: profile.fbSize, hours: profile.fbHours, coldStorage: profile.fbColdStorage
+                    size: profile.fbSize, hours: profile.fbHours, coldStorage: profile.fbColdStorage,
+                    latitude: fbLatitude, longitude: fbLongitude
                 )
             }
 
@@ -467,9 +471,21 @@ final class PantryLinkViewModel {
 
     func saveFoodBankLocally(
         id: Int, name: String, address: String, zipCode: String, city: String,
-        phone: String, email: String, size: String, hours: String, coldStorage: Bool
+        phone: String, email: String, size: String, hours: String, coldStorage: Bool,
+        latitude: Double? = nil, longitude: Double? = nil
     ) async {
-        let coord = LocationHelper.coords(address: address, zip: zipCode)
+        // Coordinate priority: (1) exact coords captured from address autocomplete, (2) a real
+        // forward-geocode of the typed address, (3) the offline ZIP table. Without (1)/(2), any
+        // address the small offline table doesn't know fell back to the default Atlanta center —
+        // which is why every new pantry was landing in the middle of Atlanta.
+        let coord: GeoCoord
+        if let latitude, let longitude, latitude != 0 || longitude != 0 {
+            coord = GeoCoord(latitude: latitude, longitude: longitude)
+        } else if let geocoded = await Self.geocodeAddress(address: address, city: city, zip: zipCode) {
+            coord = geocoded
+        } else {
+            coord = LocationHelper.coords(address: address, zip: zipCode)
+        }
         let dto = FoodBankDTO(
             id: id, name: name, address: address, zipCode: zipCode, city: city, state: "GA",
             latitude: coord.latitude, longitude: coord.longitude, phone: phone, email: email,
@@ -477,6 +493,24 @@ final class PantryLinkViewModel {
         )
         try? await repository.insertFoodBank(dto)
         await remoteProfile.saveFoodBankDocument(dto)
+    }
+
+    /// Forward-geocode a Georgia street address to real coordinates via CLGeocoder. Returns nil if
+    /// there's no address or the lookup fails, so the caller can fall back to the offline table.
+    private static func geocodeAddress(address: String, city: String, zip: String) async -> GeoCoord? {
+        let street = address.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !street.isEmpty else { return nil }
+        let query = [street, city, "GA", zip]
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: ", ")
+        guard let placemarks = try? await CLGeocoder().geocodeAddressString(query),
+              let loc = placemarks.first?.location else { return nil }
+        let lat = loc.coordinate.latitude, lng = loc.coordinate.longitude
+        // Reject wildly-off results so a pantry never lands off the Georgia map (Georgia's bounds,
+        // padded). Out-of-bounds → caller falls back to the offline ZIP table, which stays in-state.
+        guard lat > 30.0, lat < 35.5, lng > -86.0, lng < -80.5 else { return nil }
+        return GeoCoord(latitude: lat, longitude: lng)
     }
 
     // MARK: - Donor operations
@@ -495,6 +529,27 @@ final class PantryLinkViewModel {
             return (true, "Successfully claimed \(quantity) items!")
         case .error(let message):
             showToast("Claim failed: \(message)")
+            return (false, message)
+        }
+    }
+
+    /// Amazon fulfillment: reserve `quantity`, then attach the donor's order-confirmation image and
+    /// send it to the food bank's Verify queue in one step. `receiptImage` is a compressed base64 JPEG.
+    func fulfillViaAmazon(requestId: Int, quantity: Int, receiptImage: String) async -> (Bool, String) {
+        let result = (try? await repository.fulfillViaAmazon(
+            donorId: currentUserEmail, requestId: requestId, quantityToClaim: quantity,
+            receiptImage: receiptImage, timestamp: nowMs))
+            ?? .error(message: "Fulfillment failed.")
+        switch result {
+        case .success:
+            await refreshAll()
+            showToast("Order confirmation sent! The pantry will verify your delivery.")
+            triggerSimulatedPushAlert(
+                title: "Amazon Order Submitted",
+                message: "Thanks! Your confirmation for \(quantity) item(s) was sent to the pantry for review.")
+            return (true, "Sent your confirmation for \(quantity) item(s)!")
+        case .error(let message):
+            showToast("Fulfillment failed: \(message)")
             return (false, message)
         }
     }
@@ -605,7 +660,8 @@ final class PantryLinkViewModel {
 
     func createRequest(
         title: String, category: String, itemDescription: String,
-        quantityNeeded: Int, deadline: String, dropOffLocation: String, extraNotes: String
+        quantityNeeded: Int, deadline: String, dropOffLocation: String, extraNotes: String,
+        amazonUrl: String = ""
     ) async {
         // Stamp the request with the CURRENT food bank (not a hardcoded/first one), so it shows up
         // only under this pantry — and everyone else's dashboards stay clean.
@@ -620,7 +676,8 @@ final class PantryLinkViewModel {
             title: title, category: category, itemDescription: itemDescription,
             quantityNeeded: quantityNeeded, quantityRemaining: quantityNeeded,
             deadline: deadline, dropOffLocation: dropOffLocation, extraNotes: extraNotes,
-            status: RequestStatus.posted.rawValue
+            status: RequestStatus.posted.rawValue,
+            amazonUrl: amazonUrl.trimmingCharacters(in: .whitespacesAndNewlines)
         )
         try? await repository.insertRequest(request)
         await refreshAll()

@@ -159,6 +159,7 @@ actor PantryLinkStore {
             existing.dropOffLocation = input.dropOffLocation
             existing.extraNotes = input.extraNotes
             existing.status = input.status
+            existing.amazonUrl = input.amazonUrl
             try save()
             return existing.entityID
         }
@@ -169,7 +170,7 @@ actor PantryLinkStore {
             title: input.title, category: input.category, itemDescription: input.itemDescription,
             quantityNeeded: input.quantityNeeded, quantityRemaining: input.quantityRemaining,
             deadline: input.deadline, dropOffLocation: input.dropOffLocation,
-            extraNotes: input.extraNotes, status: input.status
+            extraNotes: input.extraNotes, status: input.status, amazonUrl: input.amazonUrl
         )
         modelContext.insert(model)
         try save()
@@ -190,6 +191,7 @@ actor PantryLinkStore {
         existing.dropOffLocation = input.dropOffLocation
         existing.extraNotes = input.extraNotes
         existing.status = input.status
+        existing.amazonUrl = input.amazonUrl
         try save()
     }
 
@@ -246,6 +248,7 @@ actor PantryLinkStore {
             existing.dropoffConfirmationTimestamp = input.dropoffConfirmationTimestamp
             existing.foodBankReviewResult = input.foodBankReviewResult
             existing.rejectionReason = input.rejectionReason
+            existing.receiptImage = input.receiptImage
             try save()
             return existing.entityID
         }
@@ -256,7 +259,8 @@ actor PantryLinkStore {
             quantityClaimed: input.quantityClaimed, claimTimestamp: input.claimTimestamp,
             claimStatus: input.claimStatus,
             dropoffConfirmationTimestamp: input.dropoffConfirmationTimestamp,
-            foodBankReviewResult: input.foodBankReviewResult, rejectionReason: input.rejectionReason
+            foodBankReviewResult: input.foodBankReviewResult, rejectionReason: input.rejectionReason,
+            receiptImage: input.receiptImage
         )
         modelContext.insert(model)
         try save()
@@ -478,7 +482,9 @@ actor PantryLinkStore {
     }
 
     /// Kotlin: dropOffClaimTransaction(claimId, timestamp)
-    func dropOffClaimTransaction(claimId: Int, timestamp: Int64) throws -> Bool {
+    /// `receiptImage` (base64 JPEG) is attached for Amazon fulfillments so the food bank can review
+    /// the order confirmation; nil leaves any existing receipt untouched (physical drop-offs).
+    func dropOffClaimTransaction(claimId: Int, timestamp: Int64, receiptImage: String? = nil) throws -> Bool {
         guard let claim = try claimModel(claimId) else { return false }
         if claim.claimStatus != ClaimStatus.claimed.rawValue
             && claim.claimStatus != ClaimStatus.readyForDropOff.rawValue {
@@ -490,6 +496,7 @@ actor PantryLinkStore {
         // Update claim to "Dropped Off"
         claim.claimStatus = ClaimStatus.droppedOff.rawValue
         claim.dropoffConfirmationTimestamp = timestamp
+        if let receiptImage { claim.receiptImage = receiptImage }
 
         // Update main request status
         if let request = try requestModel(claim.requestId) {

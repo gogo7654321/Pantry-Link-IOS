@@ -92,10 +92,23 @@ final class PantryLinkRepository: Sendable {
         return success
     }
 
-    func markClaimAsDroppedOff(claimId: Int, timestamp: Int64) async throws -> Bool {
-        let success = try await store.dropOffClaimTransaction(claimId: claimId, timestamp: timestamp)
+    func markClaimAsDroppedOff(claimId: Int, timestamp: Int64, receiptImage: String? = nil) async throws -> Bool {
+        let success = try await store.dropOffClaimTransaction(claimId: claimId, timestamp: timestamp, receiptImage: receiptImage)
         if success { try await pushClaimAndRequest(claimId: claimId); await pushAuditLogs(since: timestamp) }
         return success
+    }
+
+    /// Amazon fulfillment: reserve the quantity, then immediately mark it dropped-off with the
+    /// donor's order-confirmation image attached, so it lands in the food bank's Verify queue.
+    func fulfillViaAmazon(
+        donorId: String, requestId: Int, quantityToClaim: Int, receiptImage: String, timestamp: Int64
+    ) async throws -> ClaimResult {
+        let result = try await tryClaimRequest(
+            donorId: donorId, requestId: requestId, quantityToClaim: quantityToClaim, timestamp: timestamp)
+        if case let .success(claimId) = result {
+            _ = try await markClaimAsDroppedOff(claimId: claimId, timestamp: timestamp, receiptImage: receiptImage)
+        }
+        return result
     }
 
     func reviewClaim(

@@ -148,9 +148,10 @@ nonisolated final class PantryRequest: IntIdentified {
     var quantityNeeded: Int
     var quantityRemaining: Int
     var deadline: String
-    var dropOffLocation: String     // standardized address
+    var dropOffLocation: String     // standardized address (= Amazon ship-to address for online needs)
     var extraNotes: String
     var status: String              // see RequestStatus
+    var amazonUrl: String = ""      // optional Amazon product link; empty = physical drop-off only
 
     init(
         entityID: Int = 0,
@@ -164,7 +165,8 @@ nonisolated final class PantryRequest: IntIdentified {
         deadline: String,
         dropOffLocation: String,
         extraNotes: String,
-        status: String
+        status: String,
+        amazonUrl: String = ""
     ) {
         self.entityID = entityID
         self.foodBankId = foodBankId
@@ -178,6 +180,7 @@ nonisolated final class PantryRequest: IntIdentified {
         self.dropOffLocation = dropOffLocation
         self.extraNotes = extraNotes
         self.status = status
+        self.amazonUrl = amazonUrl
     }
 }
 
@@ -195,6 +198,7 @@ nonisolated final class Claim: IntIdentified {
     var dropoffConfirmationTimestamp: Int64?
     var foodBankReviewResult: String?
     var rejectionReason: String?
+    var receiptImage: String?                   // base64 JPEG of the Amazon order confirmation
 
     init(
         entityID: Int = 0,
@@ -207,7 +211,8 @@ nonisolated final class Claim: IntIdentified {
         claimStatus: String,
         dropoffConfirmationTimestamp: Int64? = nil,
         foodBankReviewResult: String? = nil,
-        rejectionReason: String? = nil
+        rejectionReason: String? = nil,
+        receiptImage: String? = nil
     ) {
         self.entityID = entityID
         self.requestId = requestId
@@ -220,6 +225,7 @@ nonisolated final class Claim: IntIdentified {
         self.dropoffConfirmationTimestamp = dropoffConfirmationTimestamp
         self.foodBankReviewResult = foodBankReviewResult
         self.rejectionReason = rejectionReason
+        self.receiptImage = receiptImage
     }
 }
 
@@ -293,6 +299,7 @@ struct RequestDTO: Identifiable, Sendable, Hashable {
     let dropOffLocation: String
     let extraNotes: String
     let status: String
+    var amazonUrl: String = ""
 }
 
 struct ClaimDTO: Identifiable, Sendable, Hashable {
@@ -307,6 +314,7 @@ struct ClaimDTO: Identifiable, Sendable, Hashable {
     let dropoffConfirmationTimestamp: Int64?
     let foodBankReviewResult: String?
     let rejectionReason: String?
+    var receiptImage: String? = nil
 }
 
 struct AuditLogDTO: Identifiable, Sendable, Hashable {
@@ -337,7 +345,7 @@ extension PantryRequest {
                    category: category, itemDescription: itemDescription,
                    quantityNeeded: quantityNeeded, quantityRemaining: quantityRemaining,
                    deadline: deadline, dropOffLocation: dropOffLocation,
-                   extraNotes: extraNotes, status: status)
+                   extraNotes: extraNotes, status: status, amazonUrl: amazonUrl)
     }
 }
 
@@ -348,7 +356,8 @@ extension Claim {
                  quantityClaimed: quantityClaimed, claimTimestamp: claimTimestamp,
                  claimStatus: claimStatus,
                  dropoffConfirmationTimestamp: dropoffConfirmationTimestamp,
-                 foodBankReviewResult: foodBankReviewResult, rejectionReason: rejectionReason)
+                 foodBankReviewResult: foodBankReviewResult, rejectionReason: rejectionReason,
+                 receiptImage: receiptImage)
     }
 }
 

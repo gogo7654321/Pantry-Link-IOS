@@ -8,6 +8,7 @@
 
 import SwiftUI
 import CoreLocation
+import PhotosUI
 
 // MARK: - Request card (ItemRequestCard)
 
@@ -35,6 +36,12 @@ struct RequestCard: View {
                     Label(request.foodBankName, systemImage: "building.2")
                         .font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.pantrySecondary)
                         .labelStyle(.titleAndIcon)
+                    if AmazonLink.isValid(request.amazonUrl) {
+                        Label("Amazon fulfillment", systemImage: "cart.fill")
+                            .font(.system(size: 10, weight: .bold)).foregroundStyle(Color.pantryTertiary)
+                            .padding(.horizontal, 8).padding(.vertical, 3)
+                            .background(Color.pantryTertiary.opacity(0.12), in: .capsule)
+                    }
                 }
                 Spacer()
                 Label(request.category.uppercased(), systemImage: categorySymbol(request.category))
@@ -109,6 +116,16 @@ struct ClaimSheet: View {
     @State private var quantity = ""
     @State private var error: String?
 
+    // Amazon fulfillment
+    @State private var showSafari = false
+    @State private var receiptItem: PhotosPickerItem?
+    @State private var receiptPreview: UIImage?
+    @State private var receiptBase64: String?
+    @State private var processing = false
+
+    private var amazonURL: URL? { AmazonLink.normalized(request.amazonUrl) }
+    private var isAmazon: Bool { amazonURL != nil }
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -117,7 +134,7 @@ struct ClaimSheet: View {
                     info("Category", request.category)
                     info("Vetted Requirements", request.itemDescription)
                     info("Pantry", request.foodBankName)
-                    info("Drop-Off", request.dropOffLocation)
+                    info(isAmazon ? "Ship-To Address" : "Drop-Off", request.dropOffLocation)
                     info("Deadline Date", request.deadline)
                     if !request.extraNotes.isEmpty { info("Special Notes", request.extraNotes) }
                     Divider().overlay(Color.pantryDivider)
@@ -135,34 +152,103 @@ struct ClaimSheet: View {
                         }
                     }
 
-                    Text("Enter amount you commit to bring:")
+                    Text(isAmazon ? "How many will you buy & ship?" : "Enter amount you commit to bring:")
                         .font(.system(size: 13, weight: .bold)).foregroundStyle(Color.pantryTextDark)
-                    TextField("How many items will you purchase/provide?", text: $quantity)
+                    TextField("Quantity", text: $quantity)
                         .keyboardType(.numberPad)
                         .padding(12).background(Color.pantryFieldFill, in: .rect(cornerRadius: 10))
                         .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Color.pantryBorder, lineWidth: 1))
+
+                    if isAmazon { amazonSection }
 
                     if let error {
                         Text("⚠️ \(error)").font(.system(size: 12, weight: .semibold)).foregroundStyle(.red)
                     }
 
-                    Text("Note: Once you accept, these items are reserved. You must deliver them to the pantry in person before the deadline.")
+                    Text(isAmazon
+                         ? "Buy the item on Amazon, ship it to the address above, then upload your order confirmation so the pantry can verify it."
+                         : "Note: Once you accept, these items are reserved. You must deliver them to the pantry in person before the deadline.")
                         .font(.system(size: 11)).foregroundStyle(Color.pantryTextMuted)
                 }
                 .padding(20)
             }
-            .navigationTitle("Claim Assistance Request")
+            .navigationTitle(isAmazon ? "Fulfill via Amazon" : "Claim Assistance Request")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Reserve & Accept") { submit() }.fontWeight(.bold)
+                    if processing {
+                        ProgressView()
+                    } else {
+                        Button(isAmazon ? "Submit" : "Reserve & Accept") { submit() }.fontWeight(.bold)
+                    }
                 }
             }
         }
+        .sheet(isPresented: $showSafari) { if let amazonURL { SafariView(url: amazonURL) } }
+        .onChange(of: receiptItem) { _, newItem in Task { await loadReceipt(newItem) } }
         .onAppear {
             // clampDefaultClaimQuantity: min(remaining, 5)
             quantity = String(request.quantityRemaining < 5 ? request.quantityRemaining : 5)
+        }
+    }
+
+    // MARK: Amazon section (view listing in-app + upload order confirmation)
+
+    private var amazonSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Button { showSafari = true } label: {
+                Label("View item on Amazon", systemImage: "cart.fill")
+                    .font(.system(size: 14, weight: .bold)).frame(maxWidth: .infinity).padding(.vertical, 8)
+            }
+            .buttonStyle(.glassProminent).tint(Color.pantryTertiary)
+
+            Text("AFTER ORDERING, UPLOAD YOUR CONFIRMATION")
+                .font(.system(size: 10, weight: .bold)).foregroundStyle(Color.pantrySecondary).kerning(0.5)
+
+            if let receiptPreview {
+                ZStack(alignment: .topTrailing) {
+                    Image(uiImage: receiptPreview)
+                        .resizable().scaledToFit().frame(maxHeight: 220)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Color.pantryBorder, lineWidth: 1))
+                    PhotosPicker(selection: $receiptItem, matching: .images) {
+                        Text("Change").font(.system(size: 11, weight: .bold))
+                            .padding(.horizontal, 10).padding(.vertical, 5)
+                            .background(.ultraThinMaterial, in: Capsule())
+                    }
+                    .padding(8)
+                }
+            } else {
+                PhotosPicker(selection: $receiptItem, matching: .images) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "photo.badge.plus").font(.system(size: 16))
+                        Text("Upload order confirmation / receipt").font(.system(size: 13, weight: .semibold))
+                        Spacer()
+                    }
+                    .foregroundStyle(Color.pantryPrimary)
+                    .padding(14)
+                    .frame(maxWidth: .infinity)
+                    .background(Color.pantryFieldFill, in: .rect(cornerRadius: 12))
+                    .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Color.pantryPrimary.opacity(0.4),
+                                                                             style: StrokeStyle(lineWidth: 1, dash: [4])))
+                }
+            }
+        }
+        .padding(12)
+        .background(Color.pantryTertiary.opacity(0.06), in: .rect(cornerRadius: 14))
+        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Color.pantrySecondaryContainer, lineWidth: 1))
+    }
+
+    private func loadReceipt(_ item: PhotosPickerItem?) async {
+        guard let item else { return }
+        error = nil
+        if let data = try? await item.loadTransferable(type: Data.self), let img = UIImage(data: data) {
+            receiptPreview = img
+            receiptBase64 = ReceiptImage.encode(img)
+            if receiptBase64 == nil { error = "Couldn't process that image — try another." }
+        } else {
+            error = "Couldn't load that image — try another."
         }
     }
 
@@ -173,9 +259,21 @@ struct ClaimSheet: View {
         if qty > request.quantityRemaining {
             error = "You cannot claim more than the remaining quantity (\(request.quantityRemaining))."; return
         }
-        Task {
-            let (ok, msg) = await viewModel.claimRequest(requestId: request.id, quantity: qty)
-            if ok { dismiss() } else { error = msg }
+        if isAmazon {
+            guard let receipt = receiptBase64 else {
+                error = "Please upload your Amazon order confirmation first."; return
+            }
+            processing = true
+            Task {
+                let (ok, msg) = await viewModel.fulfillViaAmazon(requestId: request.id, quantity: qty, receiptImage: receipt)
+                processing = false
+                if ok { dismiss() } else { error = msg }
+            }
+        } else {
+            Task {
+                let (ok, msg) = await viewModel.claimRequest(requestId: request.id, quantity: qty)
+                if ok { dismiss() } else { error = msg }
+            }
         }
     }
 

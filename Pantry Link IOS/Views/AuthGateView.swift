@@ -48,6 +48,8 @@ struct AuthGateView: View {
     @State private var fbCity = ""
     @State private var fbZip = ""
     @State private var fbSize = ""
+    @State private var fbLat: Double? = nil     // exact coords from the address autocomplete
+    @State private var fbLng: Double? = nil
     @State private var opDaysSelection = "Mon-Fri"
     @State private var opHoursSelection = "9 AM - 5 PM"
     @State private var opCustomHours = ""
@@ -202,6 +204,9 @@ struct AuthGateView: View {
         AddressAutocompleteField(title: "Street Address", text: $fbAddress) { r in
             if !r.city.isEmpty { fbCity = r.city }
             if !r.zip.isEmpty { fbZip = r.zip }
+            // Capture exact coordinates so the pantry pins at its real location, not Atlanta center.
+            fbLat = r.latitude
+            fbLng = r.longitude
         }
         HStack(spacing: 10) {
             PantryField(title: "City (GA)", systemImage: nil, text: $fbCity)
@@ -410,6 +415,7 @@ struct AuthGateView: View {
                     phone: phone,
                     fbAddress: fbAddress, fbCity: fbCity, fbZip: fbZip, fbSize: fbSize,
                     fbHours: calculatedFbHours, fbColdStorage: fbColdStorage,
+                    fbLatitude: fbLat, fbLongitude: fbLng,
                     donorZip: donorZip, donorCity: donorCity,
                     donorCanServeType: donorCanServeType, donorCanServeQty: donorCanServeQty,
                     donorFrequency: donorFrequency)

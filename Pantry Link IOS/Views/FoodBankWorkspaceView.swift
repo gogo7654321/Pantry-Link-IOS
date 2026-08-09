@@ -9,6 +9,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 struct FoodBankWorkspaceView: View {
     @Bindable var viewModel: PantryLinkViewModel
@@ -112,9 +113,18 @@ struct FBPostRequestView: View {
     @State private var itemDesc = ""
     @State private var quantity = ""
     @State private var deadline = "2026-06-30"
-    @State private var location = "12 Peachtree St NW, Atlanta, GA 30308"
+    @State private var location = ""          // defaults to this pantry's own address (see onAppear)
     @State private var notes = ""
+    @State private var amazonUrl = ""
     @State private var postCount = 0
+
+    /// This pantry's address, assembled from its profile — the sensible default drop-off/ship-to.
+    private var myPantryAddress: String {
+        guard let fb = viewModel.myFoodBank else { return "" }
+        return [fb.address, fb.city, fb.state.isEmpty ? "GA" : fb.state, fb.zipCode]
+            .map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+            .joined(separator: ", ")
+    }
 
     var body: some View {
         ScrollView {
@@ -151,7 +161,25 @@ struct FBPostRequestView: View {
                     field("Quantity Needed", text: $quantity).keyboardType(.numberPad)
                     field("Deadline (YYYY-MM-DD)", text: $deadline)
                 }
-                field("Drop-Off Location (Partner Address)", text: $location)
+                field("Drop-Off / Ship-To Address (Partner Address)", text: $location)
+
+                // Amazon fulfillment (optional): donors can buy the item and ship it here.
+                VStack(alignment: .leading, spacing: 6) {
+                    Label("Amazon Link (Optional)", systemImage: "cart.fill")
+                        .font(.system(size: 13, weight: .bold)).foregroundStyle(Color.pantryPrimary)
+                    field("Paste a single Amazon product link", text: $amazonUrl)
+                        .textInputAutocapitalization(.never).autocorrectionDisabled()
+                    if !amazonUrl.trimmingCharacters(in: .whitespaces).isEmpty && !AmazonLink.isValid(amazonUrl) {
+                        Text("That doesn't look like a valid link. Paste the full product URL.")
+                            .font(.system(size: 10.5)).foregroundStyle(.red)
+                    }
+                    Text("Donors can buy it and ship to the address above, then upload their order confirmation for you to verify. Using a wishlist? Post each item as its own request — it's far easier to track who fulfilled what.")
+                        .font(.system(size: 10.5)).foregroundStyle(Color.pantryTextMuted)
+                }
+                .padding(12)
+                .background(Color.pantryPrimary.opacity(0.04), in: .rect(cornerRadius: 12))
+                .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Color.pantrySecondaryContainer, lineWidth: 1))
+
                 field("Handling Notes (Optional)", text: $notes)
 
                 Button { submit() } label: {
@@ -163,6 +191,19 @@ struct FBPostRequestView: View {
             .padding(16)
         }
         .sensoryFeedback(.success, trigger: postCount)
+        .onAppear {
+            // Default the drop-off / ship-to box to THIS pantry's own address (from its profile),
+            // not a hardcoded placeholder. Only prefill when the box is still empty.
+            if location.trimmingCharacters(in: .whitespaces).isEmpty {
+                location = myPantryAddress
+            }
+        }
+        .task(id: viewModel.myFoodBank?.id) {
+            // The pantry record may load slightly after the view appears; fill in once it's known.
+            if location.trimmingCharacters(in: .whitespaces).isEmpty {
+                location = myPantryAddress
+            }
+        }
     }
 
     private func submit() {
@@ -170,11 +211,17 @@ struct FBPostRequestView: View {
             viewModel.showToast("Inputs validation failed. Title, description and numerical quantity are required!")
             return
         }
+        let trimmedAmazon = amazonUrl.trimmingCharacters(in: .whitespaces)
+        if !trimmedAmazon.isEmpty && !AmazonLink.isValid(trimmedAmazon) {
+            viewModel.showToast("That Amazon link isn't valid. Paste the full product URL or clear it.")
+            return
+        }
         Task {
             await viewModel.createRequest(title: title, category: category, itemDescription: itemDesc,
                                           quantityNeeded: qty, deadline: deadline,
-                                          dropOffLocation: location, extraNotes: notes)
-            title = ""; itemDesc = ""; quantity = ""
+                                          dropOffLocation: location, extraNotes: notes,
+                                          amazonUrl: trimmedAmazon)
+            title = ""; itemDesc = ""; quantity = ""; amazonUrl = ""
             postCount += 1
         }
     }
@@ -193,6 +240,7 @@ struct FBVerifyDropsView: View {
     @Bindable var viewModel: PantryLinkViewModel
     @State private var rejectTarget: ClaimDTO?
     @State private var actionCount = 0
+    @State private var zoomedReceipt: ReceiptViewerItem?
 
     private var drops: [ClaimDTO] { viewModel.myClaims.filter { $0.claimStatus == "Dropped Off" } }
 
@@ -211,6 +259,7 @@ struct FBVerifyDropsView: View {
             .padding(16)
         }
         .sensoryFeedback(.success, trigger: actionCount)
+        .fullScreenCover(item: $zoomedReceipt) { item in ReceiptViewer(image: item.image) }
         .confirmationDialog("Confirm Delivery Rejection", isPresented: Binding(
             get: { rejectTarget != nil }, set: { if !$0 { rejectTarget = nil } }
         ), titleVisibility: .visible) {
@@ -249,6 +298,25 @@ struct FBVerifyDropsView: View {
                 Spacer()
                 Text(claim.dropoffConfirmationTimestamp.map { pantryFormatDate($0) } ?? "Today")
                     .font(.system(size: 12)).foregroundStyle(Color.pantryTextDark)
+            }
+            // Amazon order confirmation the donor uploaded — tap to view full size.
+            if let base64 = claim.receiptImage, let img = ReceiptImage.decode(base64) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Label("ORDER CONFIRMATION", systemImage: "cart.fill")
+                        .font(.system(size: 10, weight: .bold)).foregroundStyle(Color.pantryTertiary)
+                    Button { zoomedReceipt = ReceiptViewerItem(image: img) } label: {
+                        Image(uiImage: img)
+                            .resizable().scaledToFill().frame(height: 120).frame(maxWidth: .infinity)
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Color.pantryBorder, lineWidth: 1))
+                            .overlay(alignment: .bottomTrailing) {
+                                Image(systemName: "arrow.up.left.and.arrow.down.right.circle.fill")
+                                    .foregroundStyle(.white, .black.opacity(0.5)).padding(6)
+                            }
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.top, 2)
             }
             HStack(spacing: 12) {
                 Button { rejectTarget = claim } label: {
@@ -423,4 +491,30 @@ private func header(_ title: String, _ subtitle: String) -> some View {
     Text(subtitle)
         .font(.system(size: 13)).foregroundStyle(Color.pantrySecondary)
         .frame(maxWidth: .infinity, alignment: .leading)
+}
+
+// MARK: - Full-screen receipt viewer (pinch-to-zoom for the uploaded order confirmation)
+
+struct ReceiptViewerItem: Identifiable {
+    let id = UUID()
+    let image: UIImage
+}
+
+struct ReceiptViewer: View {
+    let image: UIImage
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView([.horizontal, .vertical]) {
+                Image(uiImage: image)
+                    .resizable().scaledToFit()
+                    .frame(maxWidth: .infinity)
+            }
+            .background(Color.black.opacity(0.92))
+            .navigationTitle("Order Confirmation")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+        }
+    }
 }

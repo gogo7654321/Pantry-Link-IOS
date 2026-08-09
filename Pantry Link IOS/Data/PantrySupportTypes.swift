@@ -100,7 +100,7 @@ enum PantryConstants {
     static let browseCategories = ["All", "Canned Foods", "Hygiene Products", "Baby Supplies", "School Supplies", "Shelf-Stable Items"]
 
     /// FBPostRequestTab category options (no "All").
-    static let requestCategories = ["Canned Foods", "Hygiene Products", "Baby Supplies", "School Supplies", "Shelf-Stable Items"]
+    static let requestCategories = ["Canned Foods", "Hygiene Products", "Baby Supplies", "School Supplies", "Shelf-Stable Items", "Other"]
 
     static let donorFoodTypes = ["Fresh Produce", "Canned Goods", "Dry Goods", "Dairy", "Prepared Food"]
     static let donorFoodTypesWithAll = ["Fresh Produce", "Canned Goods", "Dry Goods", "Dairy", "Prepared Food", "All Categories"]
