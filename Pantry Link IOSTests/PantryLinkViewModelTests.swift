@@ -8,6 +8,7 @@
 
 import Testing
 import Foundation
+import UIKit
 @testable import Pantry_Link_IOS
 
 @MainActor
@@ -235,6 +236,71 @@ struct PantryLinkViewModelTests {
         #expect(a.myRequests.first?.quantityRemaining == 7)
         #expect(b.myRequests.first?.quantityRemaining == 8)
         #expect(b.myRequests.first?.quantityNeeded == 8)
+    }
+
+    // MARK: - Amazon fulfillment
+
+    @Test("Amazon fulfillment end-to-end: pantry posts a link, donor fulfills with a receipt, pantry sees it in Verify")
+    func amazonFulfillment() async throws {
+        let container = PantryPersistence.makeContainer(inMemory: true)
+        let store = PantryLinkStore(modelContainer: container)
+        let repo = PantryLinkRepository(store: store)
+        func vmFor(_ tag: String) -> PantryLinkViewModel {
+            let d = UserDefaults(suiteName: "amz-\(tag)-\(UUID().uuidString)")!
+            return PantryLinkViewModel(repository: repo, auth: LocalAuthService(defaults: d),
+                                       sessionStore: PantrySessionStore(defaults: d))
+        }
+
+        // Food bank posts a request WITH an Amazon link.
+        let fb = vmFor("FB")
+        _ = await fb.signUp(email: "fb@x.com", password: "secret1", role: "Food Bank",
+            name: "Helping Hands", phone: "1112223333", fbAddress: "1 A St", fbCity: "Atlanta", fbZip: "30303")
+        await fb.createRequest(title: "Diapers", category: "Baby Supplies", itemDescription: "Size 4",
+            quantityNeeded: 10, deadline: "2026-12-31", dropOffLocation: "1 A St, Atlanta, GA",
+            extraNotes: "", amazonUrl: "amazon.com/dp/TESTSKU")
+        await fb.refreshAll()
+        let req = try #require(fb.myRequests.first)
+        #expect(req.amazonUrl == "amazon.com/dp/TESTSKU")
+        #expect(AmazonLink.isValid(req.amazonUrl))   // accepts the scheme-less link
+
+        // Donor fulfills via Amazon with an uploaded confirmation image.
+        let donor = vmFor("D")
+        _ = await donor.signUp(email: "d@x.com", password: "secret1", role: "Donor", name: "Dana", phone: "9998887777")
+        await donor.refreshAll()
+        let (ok, _) = await donor.fulfillViaAmazon(requestId: req.id, quantity: 3, receiptImage: "RECEIPT_BASE64")
+        #expect(ok)
+
+        // Pantry sees exactly one drop-off to verify, with the receipt attached and quantity decremented.
+        await fb.refreshAll()
+        let drops = fb.myClaims.filter { $0.claimStatus == "Dropped Off" }
+        #expect(drops.count == 1)
+        #expect(drops.first?.receiptImage == "RECEIPT_BASE64")
+        #expect(drops.first?.quantityClaimed == 3)
+        #expect(fb.myRequests.first?.quantityRemaining == 7)
+    }
+
+    @Test("Amazon link normalization accepts real links and rejects junk")
+    func amazonLinkValidation() {
+        #expect(AmazonLink.isValid("https://www.amazon.com/dp/B0ABC"))
+        #expect(AmazonLink.isValid("amazon.com/dp/B0ABC"))     // scheme added
+        #expect(AmazonLink.isValid("a.co/d/xyz"))
+        #expect(!AmazonLink.isValid(""))
+        #expect(!AmazonLink.isValid("   "))
+        #expect(!AmazonLink.isValid("just some text"))
+    }
+
+    @Test("Receipt image compresses to base64 and decodes back")
+    func receiptImageRoundTrip() {
+        let img = UIGraphicsImageRenderer(size: CGSize(width: 1600, height: 1200)).image { ctx in
+            UIColor.systemBlue.setFill(); ctx.fill(CGRect(x: 0, y: 0, width: 1600, height: 1200))
+        }
+        let base64 = try? #require(ReceiptImage.encode(img))
+        #expect(base64 != nil)
+        if let base64 {
+            // Downscaled + compressed → well under Firestore's ~1 MB doc limit.
+            #expect(base64.count < 700_000)
+            #expect(ReceiptImage.decode(base64) != nil)
+        }
     }
 
     @Test("A donor never gets food-bank-scoped collections")
