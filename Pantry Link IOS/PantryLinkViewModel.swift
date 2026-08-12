@@ -54,6 +54,9 @@ final class PantryLinkViewModel {
     // MARK: - Database-backed lists (Kotlin: reactive StateFlows via stateIn)
 
     var foodBanks: [FoodBankDTO] = []
+    /// Coordinates geocoded from each pantry's ADDRESS (id → coord), used for distance. Stored
+    /// lat/lng are never used — the address is the single source of truth.
+    var foodBankCoords: [Int: CLLocationCoordinate2D] = [:]
     var partnerFoodBanks: [FoodBankDTO] = []
     var requests: [RequestDTO] = []
     var claims: [ClaimDTO] = []           // current donor's claims
@@ -708,16 +711,18 @@ final class PantryLinkViewModel {
     // MARK: - Distance (Kotlin: getDistanceToFoodBank / calculateDistanceInMiles)
 
     func getDistanceToFoodBank(_ foodBank: FoodBankDTO) -> Double {
-        if !hasLocationPermission {
-            // ZIP-based approximation
-            if foodBank.zipCode == userZipCode { return 1.2 }
-            let bankZip = Int(foodBank.zipCode) ?? 30308
-            let userZip = Int(userZipCode) ?? 30308
-            let zipDiff = abs(bankZip - userZip)
-            if zipDiff == 0 { return 1.5 }
-            return min(Double(zipDiff) * 1.8, 45.0)
+        // Distance is measured to the coordinate geocoded from the pantry's ADDRESS (never a stored
+        // coordinate). Until that resolves — or without location permission — fall back to a ZIP
+        // approximation, which is also derived from the address.
+        if hasLocationPermission, let c = foodBankCoords[foodBank.id] {
+            return LocationHelper.distanceInMiles(userLatitude, userLongitude, c.latitude, c.longitude)
         }
-        return LocationHelper.distanceInMiles(userLatitude, userLongitude, foodBank.latitude, foodBank.longitude)
+        if foodBank.zipCode == userZipCode { return 1.2 }
+        let bankZip = Int(foodBank.zipCode) ?? 30308
+        let userZip = Int(userZipCode) ?? 30308
+        let zipDiff = abs(bankZip - userZip)
+        if zipDiff == 0 { return 1.5 }
+        return min(Double(zipDiff) * 1.8, 45.0)
     }
 
     // MARK: - Diagnostics
@@ -742,23 +747,22 @@ final class PantryLinkViewModel {
         async let all = repository.allClaims()
         async let logs = repository.allAuditLogs()
 
-        foodBanks = ((try? await banks) ?? []).map(fixCoords)
+        foodBanks = (try? await banks) ?? []
         requests = (try? await reqs) ?? []
         allClaims = (try? await all) ?? []
         auditLogs = (try? await logs) ?? []
         claims = currentUserEmail.isBlank ? [] : ((try? await repository.claims(forDonor: currentUserEmail)) ?? [])
+        // Resolve each pantry's ADDRESS to a coordinate for distance (cached; non-blocking).
+        Task { await geocodeFoodBankAddresses() }
     }
 
-    /// Kotlin: foodBanksState mapped banks sitting on the default GA center through the geocoder.
-    private func fixCoords(_ bank: FoodBankDTO) -> FoodBankDTO {
-        guard bank.latitude == LocationHelper.defaultCenter.latitude,
-              bank.longitude == LocationHelper.defaultCenter.longitude else { return bank }
-        let coord = LocationHelper.coords(address: bank.address, zip: bank.zipCode)
-        return FoodBankDTO(
-            id: bank.id, name: bank.name, address: bank.address, zipCode: bank.zipCode, city: bank.city,
-            state: bank.state, latitude: coord.latitude, longitude: coord.longitude, phone: bank.phone,
-            email: bank.email, verified: bank.verified, size: bank.size,
-            operatingHours: bank.operatingHours, coldStorage: bank.coldStorage)
+    /// Geocode each pantry's ADDRESS into a coordinate for distance math (memoized via GeocodeCache).
+    private func geocodeFoodBankAddresses() async {
+        for fb in foodBanks where foodBankCoords[fb.id] == nil {
+            if let coord = await GeocodeCache.shared.coordinate(for: fb.fullAddress) {
+                foodBankCoords[fb.id] = coord
+            }
+        }
     }
 
     // MARK: - Validation

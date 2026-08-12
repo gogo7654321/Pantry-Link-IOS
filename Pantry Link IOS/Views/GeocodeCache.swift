@@ -19,19 +19,33 @@ final class GeocodeCache {
     private var failed: Set<String> = []
     private let geocoder = CLGeocoder()
 
-    /// Cached coordinate for `address`, geocoding it once if needed. Returns nil if the address is
-    /// empty or Apple can't resolve it (so callers can skip the pin rather than place a wrong one).
+    /// Cached coordinate for `address`, geocoding it once if needed. Tries the full address first,
+    /// then progressively broader queries (drop the leading street component → city, GA zip → zip)
+    /// so a hard-to-resolve exact street still yields a city/ZIP-level pin instead of no pin at all.
+    /// Returns nil only if the address is empty or nothing resolves.
     func coordinate(for address: String) async -> CLLocationCoordinate2D? {
         let key = address.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !key.isEmpty else { return nil }
         if let c = cache[key] { return c }
         if failed.contains(key) { return nil }
-        guard let placemarks = try? await geocoder.geocodeAddressString(address),
-              let loc = placemarks.first?.location else {
-            failed.insert(key)
-            return nil
+
+        // Build fallback queries: full → without street → … → last segment (usually "GA zip").
+        let parts = address.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        var queries: [String] = []
+        if parts.count <= 1 {
+            queries = [address]
+        } else {
+            for start in 0..<parts.count { queries.append(parts[start...].joined(separator: ", ")) }
         }
-        cache[key] = loc.coordinate
-        return loc.coordinate
+
+        for query in queries {
+            if let placemarks = try? await geocoder.geocodeAddressString(query),
+               let loc = placemarks.first?.location {
+                cache[key] = loc.coordinate
+                return loc.coordinate
+            }
+        }
+        failed.insert(key)
+        return nil
     }
 }
