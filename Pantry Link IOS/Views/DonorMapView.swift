@@ -20,17 +20,18 @@ struct DonorMapView: View {
         case saved(Int)
     }
 
-    /// Target for the "open in Maps" dialog (works for either pin kind).
+    /// Target for the "open in Maps" dialog — just a name + address (Maps geocodes the address).
     private struct DirTarget: Identifiable {
         let id = UUID()
         let name: String
-        let coord: CLLocationCoordinate2D
         let address: String
     }
 
     @State private var selection: MapPin?
     @State private var dirTarget: DirTarget?
     @State private var claimTarget: RequestDTO?
+    /// Pin coordinates resolved from each pantry/saved-location ADDRESS (keyed by full address).
+    @State private var pinCoords: [String: CLLocationCoordinate2D] = [:]
     @State private var camera: MapCameraPosition = .region(
         MKCoordinateRegion(center: CLLocationCoordinate2D(latitude: 33.7490, longitude: -84.3880),
                            span: MKCoordinateSpan(latitudeDelta: 1.2, longitudeDelta: 1.2))
@@ -57,36 +58,38 @@ struct DonorMapView: View {
             .padding(.horizontal, 16).padding(.vertical, 10)
 
             Map(position: $camera, selection: $selection) {
-                // Food banks — green building pins with a badge showing their # of active needs.
+                // Food banks — pinned at the coordinate geocoded from their ADDRESS (not stored coords).
                 ForEach(viewModel.foodBanks) { fb in
-                    let count = openRequests(for: fb).count
-                    Annotation(fb.name, coordinate: CLLocationCoordinate2D(latitude: fb.latitude, longitude: fb.longitude)) {
-                        ZStack(alignment: .topTrailing) {
-                            Image(systemName: "building.2.fill")
-                                .font(.system(size: 15, weight: .bold)).foregroundStyle(.white)
-                                .frame(width: 36, height: 36)
-                                .background(Color.pantryPrimary, in: Circle())
-                                .overlay(Circle().strokeBorder(.white, lineWidth: 2))
-                                .shadow(color: .black.opacity(0.2), radius: 2, y: 1)
-                            if count > 0 {
-                                Text("\(count)")
-                                    .font(.system(size: 11, weight: .heavy)).foregroundStyle(.white)
-                                    .padding(.horizontal, 5).frame(minWidth: 18, minHeight: 18)
-                                    .background(Color.pantryTertiary, in: Capsule())
-                                    .overlay(Capsule().strokeBorder(.white, lineWidth: 1.5))
-                                    .offset(x: 8, y: -8)
+                    if let coord = pinCoords[fb.fullAddress] {
+                        let count = openRequests(for: fb).count
+                        Annotation(fb.name, coordinate: coord) {
+                            ZStack(alignment: .topTrailing) {
+                                Image(systemName: "building.2.fill")
+                                    .font(.system(size: 15, weight: .bold)).foregroundStyle(.white)
+                                    .frame(width: 36, height: 36)
+                                    .background(Color.pantryPrimary, in: Circle())
+                                    .overlay(Circle().strokeBorder(.white, lineWidth: 2))
+                                    .shadow(color: .black.opacity(0.2), radius: 2, y: 1)
+                                if count > 0 {
+                                    Text("\(count)")
+                                        .font(.system(size: 11, weight: .heavy)).foregroundStyle(.white)
+                                        .padding(.horizontal, 5).frame(minWidth: 18, minHeight: 18)
+                                        .background(Color.pantryTertiary, in: Capsule())
+                                        .overlay(Capsule().strokeBorder(.white, lineWidth: 1.5))
+                                        .offset(x: 8, y: -8)
+                                }
                             }
                         }
+                        .tag(MapPin.foodBank(fb.id))
                     }
-                    .tag(MapPin.foodBank(fb.id))
                 }
-                // The donor's saved drop-off coordinates — distinct terracotta star pins (selectable).
+                // The donor's saved drop-off locations — pinned from their address too.
                 ForEach(viewModel.savedLocations) { loc in
-                    let c = loc.coordinate
-                    Marker(loc.name, systemImage: "star.fill",
-                           coordinate: CLLocationCoordinate2D(latitude: c.latitude, longitude: c.longitude))
-                        .tint(Color.pantryTertiary)
-                        .tag(MapPin.saved(loc.id))
+                    if let coord = pinCoords[loc.fullAddress] {
+                        Marker(loc.name, systemImage: "star.fill", coordinate: coord)
+                            .tint(Color.pantryTertiary)
+                            .tag(MapPin.saved(loc.id))
+                    }
                 }
             }
             .mapStyle(.standard(elevation: .realistic))
@@ -95,15 +98,34 @@ struct DonorMapView: View {
             .overlay(alignment: .topTrailing) { zoomControls }
             .overlay(alignment: .bottom) { calloutOverlay }
             .animation(.easeInOut, value: selection)
+            .task(id: pinResolveKey) { await resolvePins() }
         }
         .confirmationDialog("Directions",
                             isPresented: Binding(get: { dirTarget != nil }, set: { if !$0 { dirTarget = nil } }),
                             presenting: dirTarget) { t in
-            Button("Open in Apple Maps") { MapsLauncher.openAppleMaps(name: t.name, coordinate: t.coord, address: t.address) }
-            Button("Open in Google Maps") { MapsLauncher.openGoogleMaps(coordinate: t.coord, address: t.address) }
+            Button("Open in Apple Maps") { MapsLauncher.openAppleMaps(name: t.name, address: t.address) }
+            Button("Open in Google Maps") { MapsLauncher.openGoogleMaps(address: t.address) }
             Button("Cancel", role: .cancel) {}
         }
         .sheet(item: $claimTarget) { req in ClaimSheet(viewModel: viewModel, request: req) }
+    }
+
+    /// A key that changes whenever the set of addresses changes, so pins re-resolve on data load.
+    private var pinResolveKey: String {
+        (viewModel.foodBanks.map(\.fullAddress) + viewModel.savedLocations.map(\.fullAddress))
+            .sorted().joined(separator: "|")
+    }
+
+    /// Geocode every pantry / saved-location ADDRESS into a pin coordinate (cached, one-time each).
+    private func resolvePins() async {
+        let addresses = Set(
+            (viewModel.foodBanks.map(\.fullAddress) + viewModel.savedLocations.map(\.fullAddress))
+                .filter { !$0.isEmpty })
+        for addr in addresses where pinCoords[addr] == nil {
+            if let coord = await GeocodeCache.shared.coordinate(for: addr) {
+                pinCoords[addr] = coord
+            }
+        }
     }
 
     @ViewBuilder
@@ -160,7 +182,7 @@ struct DonorMapView: View {
                 Spacer()
                 Button { selection = nil } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(Color.pantryTextMuted) }
             }
-            Text("\(fb.address), \(fb.city), \(fb.state) \(fb.zipCode)")
+            Text(fb.fullAddress)
                 .font(.system(size: 12)).foregroundStyle(Color.pantryTextDark)
             HStack(spacing: 14) {
                 Label(String(format: "%.1f mi", viewModel.getDistanceToFoodBank(fb)), systemImage: "car.fill")
@@ -200,10 +222,7 @@ struct DonorMapView: View {
                 }
             }
             Button {
-                dirTarget = DirTarget(
-                    name: fb.name,
-                    coord: CLLocationCoordinate2D(latitude: fb.latitude, longitude: fb.longitude),
-                    address: "\(fb.address), \(fb.city), \(fb.state) \(fb.zipCode)")
+                dirTarget = DirTarget(name: fb.name, address: fb.fullAddress)
             } label: {
                 Label("Get Directions", systemImage: "arrow.triangle.turn.up.right.diamond.fill")
                     .font(.system(size: 13, weight: .bold)).frame(maxWidth: .infinity).padding(.vertical, 8)
@@ -215,8 +234,7 @@ struct DonorMapView: View {
     }
 
     private func savedCallout(_ loc: SavedLocation) -> some View {
-        let c = loc.coordinate
-        return VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Label(loc.name, systemImage: "star.fill").font(.system(size: 15, weight: .heavy))
                     .foregroundStyle(Color.pantryTertiary)
@@ -233,10 +251,7 @@ struct DonorMapView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             Button {
-                dirTarget = DirTarget(
-                    name: loc.name,
-                    coord: CLLocationCoordinate2D(latitude: c.latitude, longitude: c.longitude),
-                    address: loc.zipCode.isEmpty ? loc.address : "\(loc.address) \(loc.zipCode)")
+                dirTarget = DirTarget(name: loc.name, address: loc.fullAddress)
             } label: {
                 Label("Get Directions", systemImage: "arrow.triangle.turn.up.right.diamond.fill")
                     .font(.system(size: 13, weight: .bold)).frame(maxWidth: .infinity).padding(.vertical, 8)

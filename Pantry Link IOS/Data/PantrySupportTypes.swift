@@ -82,6 +82,14 @@ struct SavedLocation: Identifiable, Sendable, Equatable {
         if let latitude, let longitude { return GeoCoord(latitude: latitude, longitude: longitude) }
         return LocationHelper.coords(address: address, zip: zipCode)
     }
+
+    /// Clean, geocoder-friendly address for map pins + directions (Georgia drop-off).
+    var fullAddress: String {
+        let street = address.trimmingCharacters(in: .whitespacesAndNewlines)
+        let zip = zipCode.trimmingCharacters(in: .whitespacesAndNewlines)
+        let stateZip = ["GA", zip].filter { !$0.isEmpty }.joined(separator: " ")
+        return [street, stateZip].filter { !$0.isEmpty }.joined(separator: ", ")
+    }
 }
 
 // MARK: - Roles

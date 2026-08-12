@@ -328,6 +328,22 @@ struct AuditLogDTO: Identifiable, Sendable, Hashable {
     let newStatus: String
 }
 
+// MARK: - Address formatting (source of truth for the map + directions — no stored coordinates)
+
+extension FoodBankDTO {
+    /// A clean, geocoder-friendly single-line address ("123 Main St, Atlanta, GA 30303").
+    /// Used verbatim for map pins and turn-by-turn directions so Apple/Google Maps resolve the
+    /// real location instead of relying on a stored (often-wrong) coordinate.
+    var fullAddress: String {
+        let st = state.trimmingCharacters(in: .whitespacesAndNewlines)
+        let street = address.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cityT = city.trimmingCharacters(in: .whitespacesAndNewlines)
+        let zip = zipCode.trimmingCharacters(in: .whitespacesAndNewlines)
+        let stateZip = [st.isEmpty ? "GA" : st, zip].filter { !$0.isEmpty }.joined(separator: " ")
+        return [street, cityT, stateZip].filter { !$0.isEmpty }.joined(separator: ", ")
+    }
+}
+
 // MARK: - @Model → DTO snapshotting
 
 extension FoodBank {

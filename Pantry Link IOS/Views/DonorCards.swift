@@ -360,10 +360,8 @@ struct ClaimCard: View {
                     .buttonStyle(.plain).foregroundStyle(Color(hex: 0x047857))
                     .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Color(hex: 0xA7F3D0), lineWidth: 1))
                     .confirmationDialog("Directions", isPresented: $showDirections, titleVisibility: .visible) {
-                        let coord = CLLocationCoordinate2D(latitude: fb.latitude, longitude: fb.longitude)
-                        let addr = "\(fb.address), \(fb.city), \(fb.state) \(fb.zipCode)"
-                        Button("Open in Apple Maps") { MapsLauncher.openAppleMaps(name: fb.name, coordinate: coord, address: addr) }
-                        Button("Open in Google Maps") { MapsLauncher.openGoogleMaps(coordinate: coord, address: addr) }
+                        Button("Open in Apple Maps") { MapsLauncher.openAppleMaps(name: fb.name, address: fb.fullAddress) }
+                        Button("Open in Google Maps") { MapsLauncher.openGoogleMaps(address: fb.fullAddress) }
                         Button("Cancel", role: .cancel) {}
                     }
                 }
