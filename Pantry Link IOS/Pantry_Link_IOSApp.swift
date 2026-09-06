@@ -9,6 +9,10 @@ import SwiftUI
 
 @main
 struct Pantry_Link_IOSApp: App {
+    // Wires APNs + FCM (see Data/PushNotifications.swift). App.init() below configures Firebase
+    // first, then the delegate's didFinishLaunching wires push — order holds under SwiftUI.
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+
     init() {
         // Configure Firebase from GoogleService-Info.plist before any service is built.
         PantryServiceFactory.configureFirebase()
