@@ -122,7 +122,9 @@ final class PantryLinkViewModel {
     func triggerSimulatedPushAlert(title: String, message: String) {
         guard pushNotificationsEnabled else { return }
         activePushAlert = "\(title)\n\(message)"        // in-app banner (foreground)
-        PantryNotifications.post(title: title, body: message)   // real system notification (background/lock screen)
+        // These fire on real coordination events (new need, claim accepted/rejected, drop-off,
+        // deadline) — all genuinely time-sensitive, so they break through Focus / Do Not Disturb.
+        PantryNotifications.post(title: title, body: message, timeSensitive: true)   // real system notification (background/lock screen)
     }
     func dismissPushAlert() { activePushAlert = nil }
 

@@ -6,5 +6,10 @@
 	     at build time. Requires the "Push Notifications" capability enabled on the App ID. -->
 	<key>aps-environment</key>
 	<string>development</string>
+	<!-- Lets urgent coordination alerts (new need, claim accepted/rejected, drop-off, deadline)
+	     break through Focus / Do Not Disturb via interruptionLevel = .timeSensitive.
+	     Requires the "Time Sensitive Notifications" capability on the App ID. -->
+	<key>com.apple.developer.usernotifications.time-sensitive</key>
+	<true/>
 </dict>
 </plist>

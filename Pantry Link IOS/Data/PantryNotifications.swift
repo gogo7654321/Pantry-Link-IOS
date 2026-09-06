@@ -28,7 +28,9 @@ enum PantryNotifications {
 
     /// Post a real local notification immediately (delivered by the system). Only fires if the
     /// user has granted permission; otherwise it silently does nothing.
-    static func post(title: String, body: String) {
+    /// `timeSensitive: true` lets the alert break through Focus / Do Not Disturb (requires the
+    /// Time Sensitive Notifications entitlement + capability).
+    static func post(title: String, body: String, timeSensitive: Bool = false) {
         let center = UNUserNotificationCenter.current()
         center.getNotificationSettings { settings in
             guard settings.authorizationStatus == .authorized
@@ -37,6 +39,7 @@ enum PantryNotifications {
             content.title = title
             content.body = body
             content.sound = .default
+            content.interruptionLevel = timeSensitive ? .timeSensitive : .active
             // Immediate delivery (trigger: nil = "as soon as possible").
             let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
             center.add(request)
